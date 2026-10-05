@@ -613,3 +613,43 @@ The proposed proxy-aligner interpretation should be weakened or rejected if cont
 8. the longitudinal benefit disappears under real tool and model variation.
 
 These are genuine falsifiers rather than implementation inconveniences.
+
+## 20. Relation to Existing Safety Architecture
+
+The systems proposal has conceptual support from existing runtime-safety work.
+
+Safety shielding has demonstrated the architecture
+
+$$
+\text{candidate actions} \rightarrow \text{safety filter} \rightarrow \text{permitted actions}
+$$
+
+rather than allowing safety to compete directly with reward.
+
+Runtime Assurance and Simplex architectures similarly permit a less-assured high-performance controller to operate while an independent mechanism watches governing properties and invokes a trusted fallback if required. NASA has developed formal verification work around this architecture.
+
+Those results support the feasibility of external enforcement.
+
+They do not establish sticky multiscale retention.
+
+That is the novel research object proposed here.
+
+## 21. What Stickiness Does Not Solve
+
+Sticky custody cannot determine whether the original patch was correct.
+
+If \(P_{\mathrm{wrong}}\) is admitted, perfect retention gives
+
+$$
+P_{\mathrm{wrong}} \rightarrow P_{\mathrm{wrong}} \rightarrow P_{\mathrm{wrong}}.
+$$
+
+Stickiness magnifies custody, not truth.
+
+Therefore the complete architecture needs both patch validity and patch persistence.
+
+Similarly, sticky retention cannot discover all unknown unsafe states.
+
+It only governs represented constraints over represented reachable structure.
+
+For this reason it should be described as a proxy aligner, not a complete alignment solution.
