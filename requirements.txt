@@ -1,0 +1,3 @@
+# Runtime: stdlib only (Python >= 3.10)
+# Dev / tests:
+pytest>=7.0
