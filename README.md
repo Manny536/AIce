@@ -28,3 +28,12 @@ PYTHONPATH=src python3 -m pytest          # after: pip install pytest
 ```
 
 Does not replace the study; it operationalizes the experimental conditions and primary metrics so longitudinal custody can be measured rather than assumed.
+
+## Companion reading
+
+Systems-side companion to the KakeyaLogic held reading (not a second geometry probe).
+
+- **[COMPANION.md](./COMPANION.md)** — held sentence, two stickinesses, L’s three L²_C fences, status tags (sticky custody **PROPOSED**; case efficacy **OPEN**; controlled probe **OWED**).
+- **Codex introduction (primary):** [AIce#1](https://github.com/Manny536/AIce/issues/1).
+- **Terminal handoff:** [grok-terminal#5](https://github.com/Manny536/grok-terminal/issues/5).
+- **[docs/PEAICE-CODEX-RHO-TUBE-HELD-001.md](./docs/PEAICE-CODEX-RHO-TUBE-HELD-001.md)** — short local pointer at #1 / companion; not a competing intro.
