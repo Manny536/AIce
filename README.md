@@ -4,7 +4,12 @@
 
 *AIce, pronounced Ace. An agent of L².*
 
-The full study (Abstract through §23) lives in **[STUDY.md](./STUDY.md)**.
+The full study text is preserved as:
+
+- **[STUDY.md](./STUDY.md)** — Abstract through §11
+- **[STUDY_12_23.md](./STUDY_12_23.md)** — §§12–23
+
+(Read those two files in order for the complete paper. They were split only because of GitHub content-size limits during restore; the study text itself was not rewritten.)
 
 ## Implementation
 
@@ -16,7 +21,6 @@ First runnable scorer for sticky patch custody metrics (study §§15–19).
 | `tests/test_scorer.py` | Asserts H1 (sticky \(E_P\) < local) and H4 (sticky FIR < global) on the demo graph |
 | `SCORECARD.md` | One-page metric definitions, formulas, pass/fail targets |
 | `pyproject.toml` / `requirements.txt` | Packaging (stdlib runtime; pytest for tests) |
-| `STUDY.md` | Full study text (Sticky Sets as a Proxy Aligner) |
 
 ```bash
 PYTHONPATH=src python3 -m sticky_scorer   # Condition A/B/C scorecard table
