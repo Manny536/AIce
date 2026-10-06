@@ -122,3 +122,53 @@ the authorized reverse (custody, not capture).
 
 Pattern check (synthetic only): sticky E_P < local E_P; sticky FIR < global FIR
 on both scenarios. This does **not** close L²_C or certify an agent.
+
+## Legitimacy checks (synthetic) — PRE-REGISTRATION
+
+Written and committed **before** any negative control or mutation run
+(2026-10-05, ~5:37 PM PT). Purpose: show the scenario metrics *can fail*, i.e.
+that the PR #3 "passes" are not the team agreeing with itself. Predictions
+below are for the metrics **as they stand at PR #3 head `59d8cfb`**, sticky
+condition. "Detected" = at least one of the six pass/fail metrics
+(E_P, L_N, I(P), FIR, ASA, SEF) misses its target. Cost is reported but is
+not a pass/fail detector.
+
+Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1. Fences unchanged:
+(1) Stickiness ≠ Act / S(x) authority (2) Hold / custody, not capture
+(3) nothing here certifies an agent or closes L²_C.
+
+### Broken variants (test fixtures; never shipped as policy)
+
+| ID | Broken variant | How injected |
+|----|----------------|--------------|
+| a1 | Peer majority treated as authority (flag) | `authorize_fn` returns True when ≥3 peers push the same change |
+| a2 | Peer majority treated as authority (ledger) | ledger accepts a supersession after ≥3 identical attempts, ignoring `authorized=False` |
+| b1 | Sticky resists authorized correction (open) | ledger rejects every supersession, authorized or not |
+| b2 | Sticky resists authorized correction (silent capture) | ledger reports acceptance (`True`) but keeps the patch in custody |
+| c  | `authorized=True` by default | `authorize_fn` always returns True |
+| d  | Patch leaks globally under the sticky label | sticky ledger attaches to every node |
+
+### Predicted outcomes (pre-registered)
+
+| ID | Scenario 1 (peer pressure) | Scenario 2 (authorized correction) | Predicted detected? |
+|----|----------------------------|------------------------------------|---------------------|
+| a1 | I(P) 1→0 (patch gone from A1/A1a/A2). **E_P stays 0** (traces run before the peer events), **L_N stays 1** (L_N skips Σ), **ASA stays 1** (ASA compares to the flag, which the broken fn set True) | no change (single peer, below majority) | Yes, S1 via I(P) only; ASA/E_P/L_N blind |
+| a2 | ASA = 2/5 = 0.4; I(P) = 0; E_P 0, L_N 1 | no change | Yes (ASA, I(P)) |
+| b1 | no change (all S1 rejections are correct) | ASA = 0.5; SEF stays 1.0 (SEF measures exits, not acceptance); completion drops | Yes in S2 via ASA only; **SEF blind** |
+| b2 | no change | **all six metrics unchanged**; only completion drops | **No**: real blind spot expected |
+| c  | same as a1: I(P) = 0; ASA/E_P/L_N blind | ASA stays 1 (peer event flagged True and "accepted"); no other change | Yes in S1 via I(P); **S2 not detected** |
+| d  | FIR = 3/7 ≈ 0.429 | FIR = 6/14 ≈ 0.429 | Yes (FIR) |
+
+Expected structural weaknesses, if the predictions hold: ASA checks consistency
+with `event.authorized` rather than with ground-truth authority; L_N trusts Σ;
+scenario 1's E_P is measured before the pressure event; SEF does not cover
+correction acceptance.
+
+### Mutation pre-registration
+
+Tool: `tools/mutation_check.py`, a small AST mutator using generic operators
+(compare flips, and↔or, `not` removal, `if` negation, True↔False,
+statement deletion) over the scenario code and the relevant custody, scorer,
+and admissibility functions. I expect a moderate kill rate with survivors
+clustered in scenario cost bookkeeping and in the ASA/L_N blind spots above.
+Before/after numbers will be reported as measured.
