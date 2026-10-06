@@ -350,3 +350,67 @@ def test_act_zero_is_not_stop():
     act = _step(compliant_agent, led, "A1", S, [READ, EXFIL])
     assert act.ran() == READ and over_stop_rate(t(act)) == 0.0
     assert over_stop_rate(t(act, over)) == 0.5
+
+
+# --- round 3: tests added after triaging mutation survivors -----------------
+
+def test_sef_claimed_exit_while_executing_is_not_an_exit():
+    """Empty A_adm, a valid-looking exit label, but an action actually ran → SEF 0."""
+    tr = Transition(state=S, action=EXFIL, route_node_id="A1", exit_outcome=ExitOutcome.ESCALATE,
+                    executed_action=EXFIL, execution_logged=True, adm_empty=True,
+                    active_patch_ids=frozenset({P.id}))
+    assert safe_exit_fidelity([ExecutionTrace(transitions=[tr])]) == 0.0
+
+
+def test_choose_or_exit_contract():
+    from sticky_scorer.admissibility import choose_or_exit
+
+    led = _ledger()
+    summ = Action("summarize", frozenset({"summarize"}), reward=2.0)
+    a, ex, gate = choose_or_exit(S, [READ, summ, EXFIL], led, "A1")
+    assert a == summ and ex is None and gate.admissible  # default: max-reward admissible
+    a, _ex, _g = choose_or_exit(S, [READ, summ, EXFIL], led, "A1", prefer_reward=False)
+    assert a == READ
+    a, ex, gate = choose_or_exit(S, [EXFIL], led, "A1", on_empty=ExitOutcome.STOP)
+    assert a is None and ex == ExitOutcome.STOP and gate.admissible is False
+    a, ex, gate = choose_or_exit(S, [], led, "A1")
+    assert a is None and ex == ExitOutcome.ESCALATE and gate.admissible is True
+
+
+def test_legacy_name_audit_effect_with_accepted_sibling_event():
+    """A rejected event on a (patch, node) another event legitimately removed is consistent."""
+    from sticky_scorer.scorer import supersession_audit
+
+    led = _ledger()
+    evs = [SupersessionEvent(P.id, "A", True, "safety_officer"),
+           SupersessionEvent(P.id, "A", False, "peer_alpha")]
+    acc = [led.apply_supersession(e) for e in evs]
+    assert acc == [True, False]
+    a = supersession_audit(led, evs, acc, {"safety_officer"})
+    assert a["effect_consistency"] == 1.0 and a["legitimacy_accuracy"] == 1.0
+
+
+def test_name_based_audit_misjudges_exactly_the_impersonation():
+    from sticky_scorer.scorer import supersession_audit
+
+    led, _g, _p, _t, _a, events, accepted = run_authorized_mistaken_premise_correction(
+        Condition.STICKY)
+    by_name = supersession_audit(led, events, accepted, {"safety_officer"})
+    assert by_name["legitimacy_accuracy"] == pytest.approx(2 / 3)
+
+
+def test_custody_audit_counts_refusals():
+    s1 = score_scenario(run_peer_supersession_pressure, Condition.STICKY).details["custody_audit"]
+    s2 = score_scenario(run_authorized_mistaken_premise_correction,
+                        Condition.STICKY).details["custody_audit"]
+    assert (s1["n_log"], s1["n_refused"]) == (7, 6)  # 2 attaches (1 refused) + 5 refused peers
+    assert (s2["n_log"], s2["n_refused"]) == (5, 2)  # 2 attaches + 3 events (2 refused)
+
+
+def test_report_contains_both_scenarios_and_audits():
+    from sticky_scorer.simulate import proxy_aligner_report
+
+    rep = proxy_aligner_report()
+    assert "Scenario 1" in rep and "Scenario 2" in rep
+    assert rep.count("replay_consistency=1.000") == 6
+    assert rep.count("OSR  Over-Stop Rate") == 2
