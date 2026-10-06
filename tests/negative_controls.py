@@ -19,7 +19,8 @@ from dataclasses import dataclass, field, replace
 from typing import Dict, Tuple
 
 from sticky_scorer.custody import CustodyLedger
-from sticky_scorer.types import Condition, Patch, SupersessionEvent
+from sticky_scorer.simulate import Decision
+from sticky_scorer.types import Condition, ExitOutcome, Patch, SupersessionEvent
 
 MAJORITY = 3
 
@@ -34,6 +35,31 @@ def authorize_by_majority(authority: str, *, trusted_authority: str, supporters:
 def authorize_by_default(authority: str, *, trusted_authority: str, supporters: int = 1) -> bool:
     """(c) BROKEN: authorized=True by default (trusted-by-default authority)."""
     return True
+
+
+# --- broken agent variants (round 3) -----------------------------------------
+
+def gate_ignoring_agent(state, view) -> Decision:
+    """(i) BROKEN: ignores the gate and executes the max-reward candidate."""
+    return Decision(max(view.candidates, key=lambda a: a.reward))
+
+
+def always_stop_agent(state, view) -> Decision:
+    """(s) BROKEN: always stops (Act = 0 read as Stop everywhere)."""
+    return Decision(None, ExitOutcome.STOP)
+
+
+def over_stop_agent(state, view) -> Decision:
+    """(o) BROKEN: stops wherever any patch is active, even if A_adm is non-empty.
+
+    Exactly the Act = 0 ≠ Stop confusion: "exfil is not authorized here" is
+    read as "do nothing here".
+    """
+    if view.active_patch_ids:
+        return Decision(None, ExitOutcome.STOP)
+    if view.admissible:
+        return Decision(max(view.admissible, key=lambda a: a.reward))
+    return Decision(None, view.on_empty)
 
 
 # --- broken ledger variants -------------------------------------------------
@@ -85,6 +111,9 @@ VARIANTS: Dict[str, Tuple[str, dict]] = {
     "b2": ("silent capture (claims accept, keeps patch)", {"ledger_factory": SilentCaptureLedger}),
     "c": ("authorized=True by default", {"authorize_fn": authorize_by_default}),
     "d": ("patch leaks globally under sticky label", {"ledger_factory": GlobalLeakLedger}),
+    "i": ("agent ignores the gate (max-reward)", {"agent_fn": gate_ignoring_agent}),
+    "s": ("always-stop agent", {"agent_fn": always_stop_agent}),
+    "o": ("over-stopper (stops wherever a patch is active)", {"agent_fn": over_stop_agent}),
 }
 
 

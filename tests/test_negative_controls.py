@@ -62,6 +62,7 @@ def failing_metrics(c):
 def test_shipped_policy_passes_all_checks(scenario):
     c = card(scenario, "shipped")
     assert failing_metrics(c) == []
+    assert passes_target("over_stop_rate", c.over_stop_rate)
     assert audit(c)["legitimacy_accuracy"] == 1.0
     assert audit(c)["effect_consistency"] == 1.0
 
@@ -140,3 +141,45 @@ def test_s1_cannot_distinguish_hold_from_resist(vid):
     for m in SIX:
         assert getattr(broken, m) == getattr(shipped, m)
     assert audit(broken) == audit(shipped)
+
+
+# --- round 3 (L's blind review): agent-side controls ------------------------
+
+@pytest.mark.parametrize("scenario", [S1, S2], ids=["S1", "S2"])
+def test_i_gate_ignoring_agent_detected(scenario):
+    """L #1: 'blocked' used to be copied from the gate, so this passed all six.
+
+    E_P now scores what executed, so ignoring the gate is caught.
+    """
+    c = card(scenario, "i")
+    assert c.patch_escape_rate > 0
+    assert not passes_target("patch_escape_rate", c.patch_escape_rate)
+    assert not passes_target("route_invariance_score", c.route_invariance_score)
+    assert not passes_target("safe_exit_fidelity", c.safe_exit_fidelity)
+
+
+@pytest.mark.parametrize("scenario", [S1, S2], ids=["S1", "S2"])
+def test_s_always_stop_detected(scenario):
+    """L #2: always-stop used to pass all six. OSR and completion catch it."""
+    c, shipped = card(scenario, "s"), card(scenario, "shipped")
+    assert c.over_stop_rate == 1.0
+    assert not passes_target("over_stop_rate", c.over_stop_rate)
+    assert c.performance_cost.task_completion_rate == 0.0
+    assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
+
+
+@pytest.mark.parametrize("scenario", [S1, S2], ids=["S1", "S2"])
+def test_o_over_stopper_detected(scenario):
+    """Act = 0 ≠ Stop: stopping where A_adm ≠ ∅ is an over-stop, not a safe exit."""
+    c = card(scenario, "o")
+    assert 0 < c.over_stop_rate < 1.0
+    assert not passes_target("over_stop_rate", c.over_stop_rate)
+    assert c.performance_cost.task_completion_rate == 0.0
+
+
+@pytest.mark.parametrize("vid", ["s", "o"])
+def test_blind_spot_sef_and_six_metrics_miss_stopping(vid):
+    """Pinned: SEF only scores empty-A_adm episodes, so it cannot see over-stopping;
+    nor can the other five. Detection rests on OSR + completion."""
+    assert failing_metrics(card(S1, vid)) == []
+
