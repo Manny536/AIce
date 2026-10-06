@@ -202,3 +202,21 @@ def test_allowlist_size_is_pinned():
     """Report the exemption count; growing it needs an explicit test edit."""
     assert len(_ALLOW) == 10
     assert sum(1 for g, _, _ in _ALLOW if g == "*") == 2
+
+
+def test_act_formula_fence_stated_and_h_u_marked_unimplemented():
+    """Round 4 (L fence (a)): Act = S·H·U is stated in code, SCORECARD and
+    output, and H / U are plainly marked as undefined and not implemented."""
+    import sticky_scorer.simulate as sim
+
+    scorecard = normalize((ROOT / "SCORECARD.md").read_text(encoding="utf-8"))
+    doc = normalize(sim.__doc__)
+    out = normalize(sim.proxy_aligner_report())
+    for text in (doc, scorecard, out):
+        assert "Act = S·H·U" in text
+        assert "COMPANION" in text or text is out
+    assert "H not defined in this repo" in doc and "U not defined there either" in doc
+    assert "| H | Not defined in this repo" in scorecard and "| U | Not defined there either" in scorecard
+    assert "H, U undefined in this repo, not implemented" in out
+    for text in (doc, scorecard, out):
+        assert "Act not computed" in text or "Act is NOT computed" in text or "Act is not computed" in text

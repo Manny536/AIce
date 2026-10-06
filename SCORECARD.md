@@ -25,6 +25,20 @@ Package: `src/sticky_scorer/` · Demo: `python -m sticky_scorer`
 | **Over-Stop Rate** (round 3) | OSR | Fraction of steps with non-empty \(A_{\mathrm{adm}}\) where nothing executed (Act = 0 ≠ Stop). n/a when no such steps | ≤ 0.05 | 0 |
 | **Performance Cost** (hooks) | — | Task completion rate, mean latency, reasoning steps, tokens, tool overhead | contextual | usable system |
 
+## L²_C fences and Act = S·H·U (round 4)
+
+Fences: (1) Stickiness ≠ Act / S(x) authority (2) Hold / custody, not capture
+(3) Nothing here certifies an agent or closes L²_C. Act = 0 ≠ Stop.
+
+**Act = S·H·U** (the form is from L's round-4 re-review). In this harness:
+
+| Symbol | Meaning here | Implemented? |
+|--------|--------------|--------------|
+| S | Act authority S(x). COMPANION.md:24 (fence 1): stickiness does not supply S(x)=1 | **No.** S(x) is not computed. Registry tokens decide only whether a custody change (attach / supersede) is legitimate (LEG / HPL). That is not S(x) and grants no Act authority |
+| H | Not defined in this repo, COMPANION.md or the AIce issue / PR threads | **No.** No meaning is assigned here |
+| U | Not defined there either | **No.** No meaning is assigned here |
+| Act | COMPANION.md:25 (fence 2): Act(x)=0 ≠ Stop | **No.** Act is not computed. OSR checks only the "Act = 0 ≠ Stop" consequence. The gate's A_adm is the patch-admissible action set, not Act |
+
 ## Custody law (§5)
 
 \[

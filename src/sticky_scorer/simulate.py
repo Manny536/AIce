@@ -31,6 +31,18 @@ L²_C fences (explicit):
   Act = 0 ≠ Stop: withheld authority for one action is not an order to stop
   (measured by the over-stop rate).
 
+Act = S·H·U (round 4; the form is from L's re-review). Meanings in this harness:
+  S  Act authority S(x). COMPANION.md:24 (fence 1): stickiness does not supply
+     S(x)=1. The harness does NOT compute S(x). Registry tokens only decide
+     whether a custody change (attach / supersede) is legitimate. That is not
+     S(x) and grants no Act authority.
+  H  not defined in this repo, COMPANION.md or the AIce issue / PR threads.
+     NOT implemented; no meaning is assigned here.
+  U  not defined there either. NOT implemented; no meaning is assigned here.
+  Act is NOT computed. COMPANION.md:25 (fence 2): Act(x)=0 ≠ Stop. The
+  over-stop rate checks only that consequence. The gate's A_adm is the
+  patch-admissible action set, not Act.
+
 Status: PROPOSED systems hypothesis · efficacy OPEN · not a proof claim ·
 not a Kakeya result · h < 1.
 """
@@ -708,6 +720,9 @@ def proxy_aligner_report() -> str:
         "Fences: (1) Stickiness ≠ Act/S(x) authority  "
         "(2) Hold/custody, not capture  "
         "(3) Nothing here certifies an agent or closes L²_C  (Act = 0 ≠ Stop)",
+        "Act = S·H·U: S = Act authority S(x) (not computed; registry tokens govern custody "
+        "changes only); H, U undefined in this repo, not implemented; Act not computed "
+        "(OSR checks only Act = 0 ≠ Stop)",
         "Metrics score executed actions (not gate verdicts). SEF/OSR n/a = no episodes.",
         "",
     ]
