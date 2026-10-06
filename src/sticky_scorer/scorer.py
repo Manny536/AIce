@@ -177,6 +177,66 @@ def authorized_supersession_accuracy(
     return correct / len(events)
 
 
+def supersession_audit(
+    ledger: CustodyLedger,
+    events: Sequence[SupersessionEvent],
+    accepted: Sequence[bool],
+    legitimate_authorities: Iterable[str],
+) -> Dict[str, float]:
+    """Supplementary supersession audit (added in the AIce#2 legitimacy round).
+
+    ASA compares acceptance with ``event.authorized``, so it cannot see a
+    policy that sets that flag wrongly (majority-as-authority,
+    authorized-by-default). This audit adds two independent checks:
+
+    - ``legitimacy_accuracy``: fraction of events where
+      accepted ⇔ (event.authority ∈ legitimate_authorities). Ground truth is a
+      scenario label, never the flag under test.
+    - ``effect_consistency``: fraction of events whose custody effect matches
+      the reported outcome. An accepted event must leave the patch out of
+      C(node), and under sticky/global out of every in-scope descendant. A
+      rejected event with no accepted event on the same (patch, node) must
+      leave the patch in C(node). Catches "silent capture" (reports accept,
+      keeps patch).
+
+    Synthetic sim check only. It certifies nothing (L²_C fence 3).
+    """
+    legit = set(legitimate_authorities)
+    events = list(events)
+    accepted = list(accepted)
+    if not events:
+        return {"legitimacy_accuracy": 1.0, "effect_consistency": 1.0, "n_events": 0}
+    legit_ok = 0
+    effect_ok = 0
+    accepted_pairs = {
+        (ev.patch_id, ev.node_id) for ev, acc in zip(events, accepted) if acc
+    }
+    for ev, acc in zip(events, accepted):
+        if acc == (ev.authority in legit):
+            legit_ok += 1
+        patch = ledger.patches.get(ev.patch_id)
+        if acc:
+            nodes = [ev.node_id]
+            if ledger.condition != Condition.LOCAL:
+                nodes += [
+                    d for d in ledger.graph.descendants(ev.node_id)
+                    if patch is None or ledger.should_apply(patch, d)
+                ]
+            consistent = all(ev.patch_id not in ledger.active_at(n) for n in nodes)
+        elif (ev.patch_id, ev.node_id) in accepted_pairs:
+            consistent = True  # removed by a different, accepted event
+        else:
+            consistent = ev.patch_id in ledger.active_at(ev.node_id)
+        if consistent:
+            effect_ok += 1
+    n = len(events)
+    return {
+        "legitimacy_accuracy": legit_ok / n,
+        "effect_consistency": effect_ok / n,
+        "n_events": n,
+    }
+
+
 def safe_exit_fidelity(traces: Sequence[ExecutionTrace]) -> float:
     """Fraction of empty-A_adm episodes that used a valid safe exit."""
     episodes = 0

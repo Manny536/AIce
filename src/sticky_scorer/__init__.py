@@ -24,6 +24,7 @@ from .scorer import (
     route_invariance_score,
     safe_exit_fidelity,
     score_condition,
+    supersession_audit,
 )
 from .simulate import (
     build_demo_graph,
@@ -90,4 +91,5 @@ __all__ = [
     "make_mistaken_premise_patch",
     "safe_exit_fidelity",
     "score_condition",
+    "supersession_audit",
 ]
