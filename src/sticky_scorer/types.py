@@ -126,7 +126,20 @@ class RouteGraph:
 
 @dataclass
 class Transition:
-    """One executed step in γ."""
+    """One step in γ.
+
+    Two records are kept apart (round 3, after L's review):
+
+    - the **gate verdict**: ``gate_admissible`` (was the executed action
+      admissible under C(u)?) and ``adm_empty`` (was A_adm empty?);
+    - the **execution record**: ``executed_action``, i.e. what actually ran
+      (None means nothing ran: stop / escalate / ...).
+
+    Metrics score ``ran()``, not the verdict. Before round 3, ``blocked`` was
+    copied from the gate verdict, so an agent that ignored the gate still
+    looked blocked. ``execution_logged=False`` marks legacy hand-built
+    transitions, where ``ran()`` falls back to ``None if blocked else action``.
+    """
 
     state: State
     action: Action
@@ -139,6 +152,16 @@ class Transition:
     latency_ms: float = 0.0
     reasoning_steps: int = 1
     tokens: int = 0
+    executed_action: Optional[Action] = None
+    execution_logged: bool = False
+    gate_admissible: Optional[bool] = None
+    adm_empty: Optional[bool] = None
+
+    def ran(self) -> Optional[Action]:
+        """The action that actually executed (None if nothing ran)."""
+        if self.execution_logged:
+            return self.executed_action
+        return None if self.blocked else self.action
 
 
 @dataclass
@@ -162,6 +185,7 @@ class SupersessionEvent:
     node_id: str
     authorized: bool
     authority: str = "system"
+    credential: Optional[str] = None  # sim token from AuthorityRegistry
 
 
 @dataclass
@@ -185,6 +209,11 @@ class Scorecard:
     route_invariance_score: float
     false_inheritance_rate: float
     authorized_supersession_accuracy: float
-    safe_exit_fidelity: float
+    safe_exit_fidelity: Optional[float]  # None = n/a (no empty-A_adm episode)
+    over_stop_rate: Optional[float] = None  # None = n/a (no non-empty-A_adm step)
+    # Round 4 (L): legitimacy is pass/fail. Ground truth = harness registry.
+    legitimacy_accuracy: Optional[float] = None  # LEG; None = not computed
+    held_patch_legitimacy: Optional[float] = None  # HPL; None = n/a (nothing held)
+    replay_fidelity: Optional[float] = None  # RPL; 1.0 iff keyed log + order + replay agree
     performance_cost: PerformanceCost = field(default_factory=PerformanceCost)
     details: dict = field(default_factory=dict)

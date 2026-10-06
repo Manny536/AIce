@@ -12,7 +12,8 @@ from .admissibility import (
     is_valid_safe_exit,
     pi_sticky,
 )
-from .custody import CustodyLedger
+from .authority import AuthorityRegistry, Verifier
+from .custody import CustodyLedger, LogEntry, replay_ledger
 from .scorer import (
     TARGETS,
     authorized_supersession_accuracy,
@@ -24,8 +25,20 @@ from .scorer import (
     route_invariance_score,
     safe_exit_fidelity,
     score_condition,
+    supersession_audit,
+    custody_audit,
 )
-from .simulate import build_demo_graph, demo_report, run_condition, run_demo
+from .simulate import (
+    build_demo_graph,
+    demo_report,
+    make_mistaken_premise_patch,
+    proxy_aligner_report,
+    run_authorized_mistaken_premise_correction,
+    run_condition,
+    run_demo,
+    run_peer_supersession_pressure,
+    run_proxy_aligner_scenarios,
+)
 from .types import (
     Action,
     Condition,
@@ -73,6 +86,17 @@ __all__ = [
     "route_invariance_score",
     "run_condition",
     "run_demo",
+    "run_proxy_aligner_scenarios",
+    "run_peer_supersession_pressure",
+    "run_authorized_mistaken_premise_correction",
+    "proxy_aligner_report",
+    "make_mistaken_premise_patch",
     "safe_exit_fidelity",
     "score_condition",
+    "supersession_audit",
+    "custody_audit",
+    "AuthorityRegistry",
+    "Verifier",
+    "LogEntry",
+    "replay_ledger",
 ]
