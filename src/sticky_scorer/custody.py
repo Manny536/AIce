@@ -8,20 +8,20 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, Mapping, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, Iterable, Mapping, Optional, Sequence, Set, Tuple
 
-from .authority import ATTACH, Verifier
+from .authority import ATTACH, GENESIS, LogWitness, Verifier
 from .types import Condition, Patch, RouteGraph, SupersessionEvent
-
-GENESIS = "0" * 64
 
 
 @dataclass(frozen=True)
 class LogEntry:
-    """One custody-log record (round 3, L #5). Refused attempts are logged too.
+    """One custody-log record. Refused attempts are logged too.
 
-    ``hash`` chains over the previous entry, so editing, dropping, or
-    reordering an entry breaks ``CustodyLedger.verify_log_chain``.
+    Round 4 (L): the entry stores the submitted ``credential`` so replay can
+    re-verify it against the registry, and ``hash`` is an HMAC seal from the
+    ``LogWitness`` (key and anchor outside the ledger). Without a witness
+    (legacy hand-built ledgers) it falls back to an unkeyed SHA-256 chain.
     """
 
     seq: int
@@ -30,7 +30,7 @@ class LogEntry:
     node_id: str
     authority: str
     flag: Optional[bool]  # event.authorized as set by the policy (supersede only)
-    credential_present: bool
+    credential: Optional[str]
     accepted: bool
     reason: str
     prev_hash: str
@@ -40,9 +40,13 @@ class LogEntry:
     def digest(prev_hash: str, *fields) -> str:
         return hashlib.sha256(repr((prev_hash,) + tuple(fields)).encode()).hexdigest()
 
+    @property
+    def credential_present(self) -> bool:
+        return bool(self.credential)
+
     def body(self) -> tuple:
         return (self.seq, self.kind, self.patch_id, self.node_id, self.authority,
-                self.flag, self.credential_present, self.accepted, self.reason)
+                self.flag, self.credential, self.accepted, self.reason)
 
 
 @dataclass
@@ -59,6 +63,8 @@ class CustodyLedger:
     # Check-only authority capability. None = legacy unverified mode (unit tests
     # that build ledgers by hand); every scenario and the demo pass a verifier.
     verifier: Optional[Verifier] = None
+    # Seal-only log capability (round 4). Key and anchor stay in the registry.
+    witness: Optional[LogWitness] = None
     _log: list = field(default_factory=list, repr=False)
 
     # --- append-only custody log -------------------------------------------
@@ -66,8 +72,9 @@ class CustodyLedger:
     def _append(self, kind, patch_id, node_id, authority, flag, credential, accepted, reason):
         prev = self._log[-1].hash if self._log else GENESIS
         body = (len(self._log), kind, patch_id, node_id, authority, flag,
-                bool(credential), bool(accepted), reason)
-        self._log.append(LogEntry(*body, prev_hash=prev, hash=LogEntry.digest(prev, *body)))
+                credential, bool(accepted), reason)
+        h = self.witness.seal(prev, body) if self.witness else LogEntry.digest(prev, *body)
+        self._log.append(LogEntry(*body, prev_hash=prev, hash=h))
 
     @property
     def log(self) -> Tuple[LogEntry, ...]:
@@ -75,6 +82,11 @@ class CustodyLedger:
         return tuple(self._log)
 
     def verify_log_chain(self) -> bool:
+        """Unkeyed structural check (legacy mode only). Witness-sealed logs are
+        verified by the registry (``AuthorityRegistry.verify_log``), which holds
+        the key and anchor."""
+        if self.witness is not None:
+            return all(e.seq == i for i, e in enumerate(self._log))
         prev = GENESIS
         for i, e in enumerate(self._log):
             if e.seq != i or e.prev_hash != prev or e.hash != LogEntry.digest(prev, *e.body()):
@@ -240,20 +252,26 @@ def replay_ledger(
     condition: Condition,
     patches: Mapping[str, Patch],
     log: Sequence[LogEntry],
+    *,
+    is_legit: Callable[[LogEntry], bool],
 ) -> CustodyLedger:
-    """Reconstruct custody from the log alone (round 3, L #5).
+    """Reconstruct custody from the log, re-verifying every entry (round 4, L #5).
 
-    Applies accepted entries in order with the reference (shipped) semantics,
-    running sticky propagation after each one. Refused entries are kept in
-    the log but change nothing. Comparing the result with the live ledger
-    catches a ledger whose reported outcomes differ from its actual custody
-    effects (silent capture, shallow supersession, global leak).
+    Each entry is applied iff ``is_legit(entry)``. In the harness that is a
+    direct registry check that the entry's binding was issued and its stored
+    credential equals the issued token. The entry's own ``accepted`` field is
+    **not** trusted. Reference (shipped) semantics are used, with sticky
+    propagation after each applied entry. Comparing the result with the live
+    ledger catches a ledger that accepted something illegitimate, refused
+    something legitimate, or whose effects disagree with its log.
     """
     led = CustodyLedger(graph=graph, condition=condition)
     for e in log:
-        if not e.accepted:
+        if not is_legit(e):
             continue
         if e.kind == ATTACH:
+            if e.patch_id not in patches:
+                continue  # unknown patch object: cannot be reproduced
             CustodyLedger._apply_attach(led, patches[e.patch_id], e.node_id)
         else:
             CustodyLedger._apply_supersede(

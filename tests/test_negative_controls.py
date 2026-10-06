@@ -23,8 +23,8 @@ for p in (ROOT / "src", ROOT / "tests"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from negative_controls import VARIANTS  # noqa: E402
-from sticky_scorer.scorer import passes_target  # noqa: E402
+from negative_controls import VARIANTS, variant_kwargs  # noqa: E402
+from sticky_scorer.scorer import SCORED_METRICS, passes_target  # noqa: E402
 from sticky_scorer.simulate import (  # noqa: E402
     run_authorized_mistaken_premise_correction,
     run_peer_supersession_pressure,
@@ -45,7 +45,7 @@ SIX = (
 
 
 def card(scenario, vid):
-    return score_scenario(scenario, Condition.STICKY, **VARIANTS[vid][1])
+    return score_scenario(scenario, Condition.STICKY, **variant_kwargs(vid))
 
 
 def audit(c):
@@ -53,7 +53,13 @@ def audit(c):
 
 
 def failing_metrics(c):
+    """Failures among the original six study metrics (kept for blind-spot pins)."""
     return [m for m in SIX if not passes_target(m, getattr(c, m))]
+
+
+def failing_scored(c):
+    """Failures among all scored pass/fail metrics (ten since round 4)."""
+    return [m for m in SCORED_METRICS if not passes_target(m, getattr(c, m))]
 
 
 # --- control baseline: the shipped policy passes ---------------------------
@@ -61,13 +67,11 @@ def failing_metrics(c):
 @pytest.mark.parametrize("scenario", [S1, S2], ids=["S1", "S2"])
 def test_shipped_policy_passes_all_checks(scenario):
     c = card(scenario, "shipped")
-    assert failing_metrics(c) == []
-    assert passes_target("over_stop_rate", c.over_stop_rate)
-    assert audit(c)["legitimacy_accuracy"] == 1.0
-    assert audit(c)["effect_consistency"] == 1.0
-    assert audit(c)["held_patch_legitimacy"] == 1.0
-    assert audit(c)["replay_consistency"] == 1.0
-    assert audit(c)["log_chain_ok"] is True
+    assert failing_scored(c) == []
+    assert (c.legitimacy_accuracy, c.held_patch_legitimacy, c.replay_fidelity) == (1.0, 1.0, 1.0)
+    a = audit(c)
+    assert a["effect_consistency"] == 1.0
+    assert a["log_chain_ok"] and a["log_matches_attempts"] and a["replay_state_ok"]
 
 
 # --- detection: each broken variant is caught where it is exercised -------
@@ -97,9 +101,11 @@ def test_b1_resisting_authorized_correction_detected():
     assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
 
 
-def test_b2_silent_capture_detected_only_by_audit():
+def test_b2_silent_capture_detected_by_replay():
+    """Round 4: replay fidelity is scored, so silent capture fails pass/fail."""
     c = card(S2, "b2")
     assert audit(c)["effect_consistency"] < 1.0
+    assert not passes_target("replay_fidelity", c.replay_fidelity)
 
 
 @pytest.mark.parametrize("scenario", [S1, S2], ids=["S1", "S2"])
@@ -130,8 +136,10 @@ def test_blind_spot_asa_and_ln_when_policy_and_ledger_agree(vid):
 
 
 def test_blind_spot_six_metrics_miss_silent_capture():
-    """All six pass/fail metrics pass under b2; only the audit catches it."""
-    assert failing_metrics(card(S2, "b2")) == []
+    """The original six study metrics pass under b2; RPL (scored since round 4) fails."""
+    c = card(S2, "b2")
+    assert failing_metrics(c) == []
+    assert failing_scored(c) == ["replay_fidelity"]
 
 
 def test_blind_spot_sef_does_not_cover_correction_acceptance():
@@ -201,8 +209,11 @@ def test_f_unauthorized_peer_patch_held_is_caught():
     registry-backed held-patch audit catches it, and completion drops.
     """
     c, shipped = card(S1, "f"), card(S1, "shipped")
-    assert audit(c)["held_patch_legitimacy"] == 0.5
-    assert failing_metrics(c) == [] and c.over_stop_rate == 0.0  # pinned blind spot
+    assert c.held_patch_legitimacy == 0.5
+    # round 4: caught by scored metrics; the original six stay blind (pinned)
+    assert set(failing_scored(c)) == {"legitimacy_accuracy", "held_patch_legitimacy",
+                                      "replay_fidelity"}
+    assert failing_metrics(c) == [] and c.over_stop_rate == 0.0
     assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
 
 
@@ -228,7 +239,9 @@ def test_t_flag_trusting_ledger_detected():
     """L: round-2 custody.py:95 trusted the flag. With a majority policy it caves."""
     c = card(S1, "t+a1")
     assert c.patch_escape_rate > 0
-    assert audit(c)["legitimacy_accuracy"] == 0.0
+    # round 4: LEG counts attach attempts too: 2 correct of 7 (all 5 peers wrong)
+    assert c.legitimacy_accuracy == pytest.approx(2 / 7)
+    assert c.replay_fidelity == 0.0
 
 
 def test_impersonated_name_is_not_legitimate():
@@ -252,12 +265,18 @@ def test_impersonated_name_is_not_legitimate():
 @pytest.mark.parametrize("scenario", [S1, S2], ids=["S1", "S2"])
 @pytest.mark.parametrize("cond", list(Condition), ids=lambda c: c.value)
 def test_replay_reconstructs_custody_from_log(scenario, cond):
-    """L #5: the ordered log alone reproduces live custody (shipped policy)."""
+    """The ordered, keyed log reproduces live custody under re-verification."""
     from sticky_scorer.custody import custody_state, replay_ledger
+    from sticky_scorer.simulate import new_registry
 
-    led, *_ = scenario(cond)
-    assert led.verify_log_chain()
-    replayed = replay_ledger(led.graph, cond, led.patches, led.log)
+    reg = new_registry()
+    led, *_ = scenario(cond, registry=reg)
+    assert reg.verify_log(led.log)
+    patches = {a.patch_id: a.patch for a in reg.attempts if a.patch is not None}
+    replayed = replay_ledger(
+        led.graph, cond, patches, led.log,
+        is_legit=lambda e: reg.is_legitimate(e.authority, e.kind, e.patch_id, e.node_id,
+                                             e.credential))
     assert custody_state(replayed) == custody_state(led)
     assert [e.seq for e in led.log] == list(range(len(led.log)))
 
@@ -273,22 +292,126 @@ def test_log_records_unauthorized_attempts_in_order():
     assert [e.credential_present for e in led.log[2:]] == [False, True, False, True, False]
 
 
-def test_log_tampering_breaks_chain():
+def _shipped_with_registry(scenario=None):
+    from sticky_scorer.simulate import new_registry
+
+    reg = new_registry()
+    led, _g, _p, _t, _a, ev, acc = (scenario or S2)(Condition.STICKY, registry=reg)
+    return reg, led, ev, acc
+
+
+def test_log_tampering_breaks_keyed_chain():
+    """Round 4: the chain is HMAC-sealed; key and anchor live in the registry."""
     from dataclasses import replace as dc_replace
 
-    led, *_ = S2(Condition.STICKY)
-    assert led.verify_log_chain()
+    reg, led, *_ = _shipped_with_registry()
+    assert reg.verify_log(led.log)
     led._log[2] = dc_replace(led._log[2], accepted=not led._log[2].accepted)
-    assert not led.verify_log_chain()
-    led2, *_ = S2(Condition.STICKY)
-    led2._log.pop(1)
-    assert not led2.verify_log_chain()
+    assert not reg.verify_log(led.log)
+
+
+@pytest.mark.parametrize("edit", ["drop_refused", "drop_accepted_correction",
+                                  "swap", "rehash_unkeyed"])
+def test_log_edits_fail_replay_fidelity(edit):
+    """L #5 (round 4): dropped refused entries, dropped accepted corrections,
+    reordering and re-hashed chains all fail RPL."""
+    from negative_controls import _rechain_unkeyed
+    from sticky_scorer.scorer import custody_audit
+
+    reg, led, ev, acc = _shipped_with_registry()
+    log = list(led._log)
+    if edit == "drop_refused":
+        log = [e for e in log if e.accepted]
+    elif edit == "drop_accepted_correction":
+        log = [e for e in log if not (e.kind == "supersede" and e.accepted)]
+    elif edit == "swap":
+        log[0], log[1] = log[1], log[0]
+    if edit != "swap":
+        log = _rechain_unkeyed(log)
+    led._log = log
+    assert custody_audit(led, ev, acc, reg)["replay_fidelity"] == 0.0
 
 
 @pytest.mark.parametrize("vid", ["b2", "e"])
 def test_replay_catches_fake_supersession(vid):
     """Silent capture / shallow supersession: the log says accepted, custody disagrees."""
-    assert audit(card(S2, vid))["replay_consistency"] == 0.0
+    c = card(S2, vid)
+    assert c.replay_fidelity == 0.0 and not audit(c)["replay_state_ok"]
+
+
+# --- round 4 (L's re-review): ground-truth isolation and L's mutants --------
+
+def _closure_objects(fn, depth=0):
+    out = []
+    for cell in getattr(fn, "__closure__", None) or ():
+        obj = cell.cell_contents
+        out.append(obj)
+        if callable(obj) and depth < 3:
+            out += _closure_objects(obj, depth + 1)
+    return out
+
+
+def test_verifier_closure_cannot_reach_registry_records():
+    """L (#3 partial): the shared verifier closure used to expose the registry.
+    It now holds only a key copy: no registry, issuance record, attempt record
+    or witness is reachable from it."""
+    from sticky_scorer.authority import AuthorityRegistry, LogWitness
+    from sticky_scorer.simulate import new_registry
+
+    reg = new_registry()
+    objs = _closure_objects(reg.verifier()._check)
+    assert not any(isinstance(o, (AuthorityRegistry, LogWitness)) for o in objs)
+    assert not any(o is reg._issued or o is reg._attempts for o in objs)
+    assert not any(getattr(o, "__self__", None) is reg for o in objs)
+
+
+def test_token_minted_with_leaked_key_is_not_legitimate():
+    """The key is still recoverable from the closure (in-process), but ground truth
+    is the issuance record, so a minted token stays illegitimate."""
+    import hashlib
+    import hmac
+
+    from negative_controls import _key_from_verifier
+    from sticky_scorer.simulate import new_registry
+
+    reg = new_registry()
+    ver = reg.verifier()
+    key = _key_from_verifier(ver)
+    tok = hmac.new(key, "\x1f".join(("peer_alpha", "supersede", "P", "A")).encode(),
+                   hashlib.sha256).hexdigest()
+    assert ver.verify(tok, "peer_alpha", "supersede", "P", "A")  # verifier fooled
+    assert not reg.is_legitimate("peer_alpha", "supersede", "P", "A", tok)  # ground truth not
+
+
+# (variant, scenario) pairs where L's round-4 mutants must fail a scored metric.
+L_ROUND4_CAUGHT = [
+    ("v", S1), ("lsr", S1), ("lsr", S2), ("lrv", S1), ("lrv", S2),
+    ("lrs", S1), ("lrs", S2), ("lsa", S2), ("tr", S1), ("tr", S2), ("up", S1),
+    ("up", S2), ("kf", S2), ("gt", S1), ("fgt", S2), ("f", S1),
+]
+
+
+@pytest.mark.parametrize("vid,scenario", L_ROUND4_CAUGHT,
+                         ids=[f"{v}-{'S1' if s is S1 else 'S2'}" for v, s in L_ROUND4_CAUGHT])
+def test_L_round4_mutants_fail_scored_metrics(vid, scenario):
+    assert failing_scored(card(scenario, vid)), vid
+
+
+@pytest.mark.parametrize("vid", ["lsa", "kf", "fgt"])
+def test_s1_does_not_exercise_governing_name_or_correction_mutants(vid):
+    """Pinned: S1 has no accepted correction and no governing-name supersession,
+    so these mutants are only exercised (and caught) in S2."""
+    assert failing_scored(card(S1, vid)) == []
+
+
+def test_limit_in_process_registry_compromise():
+    """LIMIT (pinned, out of scope): the registry is in-process. If in-process
+    code rewrites the registry's ground truth, every scored metric passes; only
+    completion drops. Not a detection claim; this documents the boundary."""
+    c, shipped = card(S1, "cr"), card(S1, "shipped")
+    assert failing_scored(c) == []
+    assert c.held_patch_legitimacy == 1.0 and c.replay_fidelity == 1.0
+    assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
 
 
 def test_registry_refuses_non_governing_issuer():

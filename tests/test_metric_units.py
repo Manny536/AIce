@@ -253,7 +253,7 @@ def test_mistaken_patch_blocks_summarize_before_correction():
 def test_e_shallow_supersession_detected_only_by_audit():
     c = score_scenario(run_authorized_mistaken_premise_correction, Condition.STICKY, **VARIANTS["e"][1])
     assert c.details["custody_audit"]["effect_consistency"] < 1.0
-    assert c.details["custody_audit"]["replay_consistency"] == 0.0
+    assert c.details["custody_audit"]["replay_fidelity"] == 0.0
     # pinned blind spot: none of the six pass/fail metrics notice
     assert c.longitudinal_retention_fidelity == 1.0
     assert c.authorized_supersession_accuracy == 1.0
@@ -412,5 +412,6 @@ def test_report_contains_both_scenarios_and_audits():
 
     rep = proxy_aligner_report()
     assert "Scenario 1" in rep and "Scenario 2" in rep
-    assert rep.count("replay_consistency=1.000") == 6
+    assert rep.count("replay_fidelity=1.000") == 6
+    assert rep.count("LEG  Legitimacy (registry)") == 2
     assert rep.count("OSR  Over-Stop Rate") == 2

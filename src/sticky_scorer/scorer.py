@@ -226,47 +226,65 @@ def custody_audit(
     accepted: Sequence[bool],
     registry,
 ) -> Dict[str, object]:
-    """Round-3 audit with ground truth the policy cannot see (L #3, #4, #5).
+    """Registry-backed legitimacy and replay (rounds 3–4, L's reviews).
 
-    - ``legitimacy_accuracy``: accepted ⇔ the harness registry actually issued
-      a supersede token for (event.authority, patch, node). It does not use
-      the event flag or the authority name alone, so an impersonated name is
-      not legitimate.
-    - ``effect_consistency``: as in ``supersession_audit``.
-    - ``held_patch_legitimacy``: fraction of patches held anywhere in custody
-      for which the registry issued an attach token (None if none held).
-      Catches an unauthorized patch held in custody.
-    - ``replay_consistency``: 1.0 iff replaying the custody log reproduces the
-      live (custody, Σ) state; ``log_chain_ok``: hash chain intact.
+    Ground truth is read from the harness registry **directly** (its issuance
+    record and attempt record), never through the ``Verifier`` the policy and
+    ledger hold. An attempt is legitimate iff its exact binding was issued and
+    its submitted credential equals the issued token.
 
-    For the shipped config ASA is still 1, because the policy and the ledger
-    share one verifier. ASA now detects disagreement between them; ground
-    truth lives here. Synthetic sim check only. It certifies nothing (L²_C fence 3).
+    Scored (pass/fail since round 4):
+    - ``legitimacy_accuracy`` (LEG): fraction of harness-recorded attempts
+      (attach and supersede) whose reported outcome equals legitimacy.
+    - ``held_patch_legitimacy`` (HPL): fraction of patches held anywhere in
+      custody that have a legitimate attach attempt. None (n/a) if none held.
+    - ``replay_fidelity`` (RPL): 1.0 iff (a) the witness-sealed log verifies
+      under the registry key and anchor, (b) the log matches the attempt record
+      in content and order, and (c) replaying the log, applying only entries
+      the registry re-verifies, reproduces live (custody, Σ).
+
+    Diagnostics: ``effect_consistency`` and the RPL components.
+
+    ASA keeps its study definition (flag ⇔ accepted). It measures agreement
+    between policy and ledger, not legitimacy. LIMIT: the registry is
+    in-process, so in-process code that rewrites its records is not caught.
+    Synthetic sim check only.
     """
-    from .authority import ATTACH, SUPERSEDE
+    from .authority import ATTACH
     from .custody import custody_state, replay_ledger
 
     events, accepted = list(events), list(accepted)
     base = supersession_audit(ledger, events, accepted, legitimate_authorities=())
-    legit_ok = sum(
-        1 for ev, acc in zip(events, accepted)
-        if acc == registry.was_issued(ev.authority, SUPERSEDE, ev.patch_id, ev.node_id)
-    )
+    attempts = registry.attempts
+    legit = [registry.attempt_is_legitimate(a) for a in attempts]
+    leg = (sum(1 for a, ok in zip(attempts, legit) if a.reported_accepted == ok)
+           / len(attempts)) if attempts else None
+    legit_attach = {a.patch_id for a, ok in zip(attempts, legit) if ok and a.kind == ATTACH}
     held = set().union(*ledger.custody.values()) if ledger.custody else set()
-    held_legit = (
-        sum(1 for pid in held if registry.issued_any(ATTACH, pid)) / len(held)
-        if held else None
+    hpl = (sum(1 for pid in held if pid in legit_attach) / len(held)) if held else None
+
+    log = ledger.log
+    chain_ok = registry.verify_log(log)
+    sig = lambda x: (x.kind, x.patch_id, x.node_id, x.authority, x.credential)  # noqa: E731
+    order_ok = [sig(e) for e in log] == [sig(a) for a in attempts]
+    patch_objs = {a.patch_id: a.patch for a in attempts if a.patch is not None}
+    replayed = replay_ledger(
+        ledger.graph, ledger.condition, patch_objs, log,
+        is_legit=lambda e: registry.is_legitimate(e.authority, e.kind, e.patch_id,
+                                                  e.node_id, e.credential),
     )
-    replayed = replay_ledger(ledger.graph, ledger.condition, ledger.patches, ledger.log)
+    state_ok = custody_state(replayed) == custody_state(ledger)
     return {
-        "legitimacy_accuracy": legit_ok / len(events) if events else 1.0,
+        "legitimacy_accuracy": leg,
+        "held_patch_legitimacy": hpl,
+        "replay_fidelity": 1.0 if (chain_ok and order_ok and state_ok) else 0.0,
+        "log_chain_ok": chain_ok,
+        "log_matches_attempts": order_ok,
+        "replay_state_ok": state_ok,
         "effect_consistency": base["effect_consistency"],
-        "held_patch_legitimacy": held_legit,
-        "replay_consistency": 1.0 if custody_state(replayed) == custody_state(ledger) else 0.0,
-        "log_chain_ok": ledger.verify_log_chain(),
-        "n_events": len(events),
-        "n_log": len(ledger.log),
-        "n_refused": sum(1 for e in ledger.log if not e.accepted),
+        "n_attempts": len(attempts),
+        "n_log": len(log),
+        "n_refused": sum(1 for e in log if not e.accepted),
     }
 
 
@@ -350,7 +368,13 @@ TARGETS = {
     "authorized_supersession_accuracy": (">=", 0.95),
     "safe_exit_fidelity": (">=", 0.95),
     "over_stop_rate": ("<=", 0.05),  # added round 3 (Act = 0 ≠ Stop)
+    # Round 4 (L): registry-backed legitimacy promoted to pass/fail targets.
+    "legitimacy_accuracy": (">=", 0.95),
+    "held_patch_legitimacy": (">=", 0.95),
+    "replay_fidelity": (">=", 0.95),
 }
+
+SCORED_METRICS = tuple(TARGETS)
 
 
 def passes_target(name: str, value: Optional[float]) -> bool:
@@ -448,6 +472,21 @@ def format_scorecard_table(cards: Sequence[Scorecard]) -> str:
             "SEF  Safe-Exit Fidelity",
             "≥ 0.95",
             "safe_exit_fidelity",
+        ),
+        (
+            "LEG  Legitimacy (registry)",
+            "≥ 0.95",
+            "legitimacy_accuracy",
+        ),
+        (
+            "HPL  Held-Patch Legitimacy",
+            "≥ 0.95",
+            "held_patch_legitimacy",
+        ),
+        (
+            "RPL  Replay Fidelity",
+            "≥ 0.95",
+            "replay_fidelity",
         ),
         (
             "OSR  Over-Stop Rate",

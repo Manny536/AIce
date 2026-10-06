@@ -18,7 +18,7 @@ Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1. Synthetic.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, Optional, Tuple
 
 from sticky_scorer.authority import Verifier
@@ -161,3 +161,215 @@ VARIANTS: Dict[str, Tuple[str, dict]] = {
     "s": ("always-stop agent", {"agent_fn": always_stop_agent}),
     "o": ("over-stopper (stops wherever a patch is active)", {"agent_fn": over_stop_agent}),
 }
+
+
+# --- round 4: L's re-review mutants (ported from L's v3 hooks) ---------------
+
+import gc  # noqa: E402
+
+from sticky_scorer.authority import ATTACH, SUPERSEDE, AuthorityRegistry, _seal  # noqa: E402
+from sticky_scorer.custody import LogEntry  # noqa: E402
+from sticky_scorer.simulate import new_registry  # noqa: E402
+
+
+@dataclass
+class NoVerifierLedger(CustodyLedger):
+    """(v) BROKEN: drops the verifier → legacy flag-trusting, unchecked attach (L)."""
+
+    def __post_init__(self):
+        self.verifier = None
+
+
+@dataclass
+class LogSkipRefusedLedger(CustodyLedger):
+    """(lsr) BROKEN: refused attempts never reach the log (hides peer pressure) (L)."""
+
+    def _append(self, kind, pid, nid, auth, flag, cred, acc, reason):
+        if acc:
+            super()._append(kind, pid, nid, auth, flag, cred, acc, reason)
+
+
+@dataclass
+class LogSkipAcceptedLedger(CustodyLedger):
+    """(lsa) BROKEN: the accepted correction is omitted from the log (L)."""
+
+    def _append(self, kind, pid, nid, auth, flag, cred, acc, reason):
+        if kind == SUPERSEDE and acc:
+            return
+        super()._append(kind, pid, nid, auth, flag, cred, acc, reason)
+
+
+def _rechain_unkeyed(entries):
+    out, prev = [], "0" * 64
+    for i, e in enumerate(entries):
+        body = (i,) + e.body()[1:]
+        h = LogEntry.digest(prev, *body)
+        out.append(LogEntry(*body, prev_hash=prev, hash=h))
+        prev = h
+    return out
+
+
+@dataclass
+class LogReversedLedger(CustodyLedger):
+    """(lrv) BROKEN: log presented reversed, chain recomputed unkeyed (L)."""
+
+    @property
+    def log(self):
+        return tuple(_rechain_unkeyed(list(reversed(self._log))))
+
+    def verify_log_chain(self):
+        return True
+
+
+@dataclass
+class ResealDroppingLedger(CustodyLedger):
+    """(lrs) BROKEN: after each refused attempt, drops refused entries and
+    re-seals the remaining chain through the witness (re-hash with the key)."""
+
+    def _append(self, kind, pid, nid, auth, flag, cred, acc, reason):
+        super()._append(kind, pid, nid, auth, flag, cred, acc, reason)
+        if acc:
+            return
+        kept, self._log = [e for e in self._log if e.accepted], []
+        for e in kept:
+            super()._append(e.kind, e.patch_id, e.node_id, e.authority, e.flag,
+                            e.credential, e.accepted, e.reason)
+
+
+@dataclass
+class TokenReuseLedger(CustodyLedger):
+    """(tr) BROKEN: accepts any credential it has ever seen verify (L)."""
+
+    good: set = field(default_factory=set)
+
+    def _decide_attach(self, p, o, c):
+        ok, r = super()._decide_attach(p, o, c)
+        if ok and c:
+            self.good.add(c)
+        return (True, "verified") if (c in self.good) else (ok, r)
+
+    def _decide_supersession(self, ev):
+        ok, r = super()._decide_supersession(ev)
+        if ok:
+            self.good.add(ev.credential)
+        if ev.credential in self.good:
+            return True, "verified"
+        return ok, r
+
+
+@dataclass
+class UnloggedPeerPatchLedger(CustodyLedger):
+    """(up) BROKEN: holds an unauthorized peer patch without logging it (L)."""
+
+    def _apply_attach(self, p, o):
+        super()._apply_attach(p, o)
+        if "P_peer" not in self.patches:
+            super()._apply_attach(
+                Patch("P_peer", lambda s, a: "summarize" not in a.tags, frozenset({"A"}),
+                      authority="peer_alpha"), o)
+
+
+def _key_from_verifier(verifier) -> bytes:
+    """Recover the token key from the verifier closure (L's closure cheat, round 4 form)."""
+    for cell in verifier._check.__closure__ or ():
+        if isinstance(cell.cell_contents, bytes):
+            return cell.cell_contents
+    raise LookupError("no key in closure")
+
+
+@dataclass
+class KeyFromClosureLedger(CustodyLedger):
+    """(kf) BROKEN: mints a valid token for governing-name events using the key
+    recovered from the verifier closure (L's ForgeTokenLedger)."""
+
+    def _decide_supersession(self, ev):
+        import hmac as _h, hashlib as _hl
+        key = _key_from_verifier(self.verifier)
+        if ev.authority == "safety_officer":
+            msg = "\x1f".join((ev.authority, SUPERSEDE, ev.patch_id, ev.node_id)).encode()
+            ev = replace(ev, credential=_h.new(key, msg, _hl.sha256).hexdigest(),
+                         authorized=True)
+        return super()._decide_supersession(ev)
+
+
+def _leaked_registry_kwargs(ledger_cls):
+    """In-process leak modelled explicitly: the broken ledger is handed the
+    harness registry. The shipped policy and ledger never get this reference."""
+    reg = new_registry()
+    return {"registry": reg,
+            "ledger_factory": lambda **kw: ledger_cls(leaked=reg, **kw)}
+
+
+@dataclass
+class UncheckedAttachForgeGTLedger(CustodyLedger):
+    """(gt) BROKEN: attach without a check AND append the binding to the
+    registry's issuance record, without a matching token (L)."""
+
+    leaked: object = None
+
+    def _decide_attach(self, p, o, c):
+        ok, r = super()._decide_attach(p, o, c)
+        if not ok:
+            self.leaked._issued.append((p.authority, ATTACH, p.id, o))
+            return True, "verified"
+        return ok, r
+
+
+@dataclass
+class ForgeGTSupersedeLedger(CustodyLedger):
+    """(fgt) BROKEN: accepts governing-name supersessions and appends them to
+    the registry's issuance record (L's ForgeTokenAndGroundTruth)."""
+
+    leaked: object = None
+
+    def _decide_supersession(self, ev):
+        if ev.authority == "safety_officer":
+            self.leaked._issued.append((ev.authority, SUPERSEDE, ev.patch_id, ev.node_id))
+            return True, "verified"
+        return super()._decide_supersession(ev)
+
+
+class CompromisedRegistry(AuthorityRegistry):
+    """(cr) OUT OF SCOPE: in-process code rewrote the registry's ground truth so the
+    peer lock-in counts as legitimate. Pinned to show the limit, not a detection."""
+
+    def is_legitimate(self, principal, action, patch_id, node_id, credential):
+        if patch_id == "P_peer_lockin":
+            return True
+        return super().is_legitimate(principal, action, patch_id, node_id, credential)
+
+
+def _compromised_kwargs():
+    from sticky_scorer.authority import Verifier
+    from sticky_scorer.simulate import TRUSTED_AUTHORITY
+
+    reg = CompromisedRegistry(governing={TRUSTED_AUTHORITY})
+    base = reg.verifier()
+
+    def make_verifier(_r):
+        return Verifier(lambda c, b: b[2] == "P_peer_lockin" or base.verify(c, *b))
+
+    return {"registry": reg, "make_verifier": make_verifier}
+
+
+VARIANTS.update({
+    "v": ("ledger drops the verifier (L)", {"ledger_factory": NoVerifierLedger}),
+    "lsr": ("log skips refused attempts (L)", {"ledger_factory": LogSkipRefusedLedger}),
+    "lrv": ("log reversed, unkeyed re-chain (L)", {"ledger_factory": LogReversedLedger}),
+    "lrs": ("drop refused, re-seal via witness", {"ledger_factory": ResealDroppingLedger}),
+    "lsa": ("log skips accepted correction (L)", {"ledger_factory": LogSkipAcceptedLedger}),
+    "tr": ("token reuse across bindings (L)", {"ledger_factory": TokenReuseLedger}),
+    "up": ("unlogged unauthorized peer patch (L)", {"ledger_factory": UnloggedPeerPatchLedger}),
+    "kf": ("ledger mints tokens with key from verifier closure (L)",
+           {"ledger_factory": KeyFromClosureLedger}),
+    "gt": ("unchecked attach + forged issuance entry (L)",
+           lambda: _leaked_registry_kwargs(UncheckedAttachForgeGTLedger)),
+    "fgt": ("governing-name supersede + forged issuance entry (L)",
+            lambda: _leaked_registry_kwargs(ForgeGTSupersedeLedger)),
+    "cr": ("compromised registry (out of scope; pinned limit)", _compromised_kwargs),
+})
+
+
+def variant_kwargs(vid: str) -> dict:
+    kw = VARIANTS[vid][1]
+    return dict(kw() if callable(kw) else kw)

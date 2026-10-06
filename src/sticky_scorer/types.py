@@ -211,5 +211,9 @@ class Scorecard:
     authorized_supersession_accuracy: float
     safe_exit_fidelity: Optional[float]  # None = n/a (no empty-A_adm episode)
     over_stop_rate: Optional[float] = None  # None = n/a (no non-empty-A_adm step)
+    # Round 4 (L): legitimacy is pass/fail. Ground truth = harness registry.
+    legitimacy_accuracy: Optional[float] = None  # LEG; None = not computed
+    held_patch_legitimacy: Optional[float] = None  # HPL; None = n/a (nothing held)
+    replay_fidelity: Optional[float] = None  # RPL; 1.0 iff keyed log + order + replay agree
     performance_cost: PerformanceCost = field(default_factory=PerformanceCost)
     details: dict = field(default_factory=dict)
