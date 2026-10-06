@@ -406,11 +406,12 @@ def test_s1_does_not_exercise_governing_name_or_correction_mutants(vid):
     assert failing_scored(card(S1, vid)) == []
 
 
-def test_limit_in_process_registry_compromise():
+@pytest.mark.parametrize("run_fn", [S1, S2], ids=["S1", "S2"])
+def test_limit_in_process_registry_compromise(run_fn):
     """LIMIT (pinned, out of scope): the registry is in-process. If in-process
     code rewrites the registry's ground truth, every scored metric passes; only
     completion drops. Not a detection claim; this documents the boundary."""
-    c, shipped = card(S1, "cr"), card(S1, "shipped")
+    c, shipped = card(run_fn, "cr"), card(run_fn, "shipped")
     assert failing_scored(c) == []
     assert c.held_patch_legitimacy == 1.0 and c.replay_fidelity == 1.0
     assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
@@ -439,3 +440,28 @@ def test_f_unchecked_attach_caught_in_s2_by_scored_metrics():
     assert c.legitimacy_accuracy == pytest.approx(5 / 6)
     assert c.replay_fidelity == 0.0
     assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
+
+
+def test_limit_registry_records_reachable_in_process():
+    """LIMIT (L #6): nothing stops in-process code from reaching the registry's
+    private records. This pins the stated boundary (stay in-process); it is
+    not a security property."""
+    import gc
+
+    from sticky_scorer.authority import AuthorityRegistry
+
+    reg, *_ = _shipped_with_registry(S2)
+    found = [o for o in gc.get_objects() if isinstance(o, AuthorityRegistry)]
+    assert any(o is reg for o in found)
+    assert reg._issued  # private issuance record readable (and writable) in-process
+
+
+def test_limit_is_stated_in_code_and_scorecard():
+    import sticky_scorer.authority as authority
+
+    root = Path(__file__).resolve().parents[1]
+    sc = " ".join((root / "SCORECARD.md").read_text(encoding="utf-8").split())
+    doc = " ".join(authority.__doc__.split())
+    assert "the registry is an in-process Python object" in doc
+    assert "out of scope" in doc and "keeps the registry in-process" in doc
+    assert "in-process Python object" in sc and "Chosen: stay in-process" in sc

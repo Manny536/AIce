@@ -39,6 +39,19 @@ Fences: (1) Stickiness ≠ Act / S(x) authority (2) Hold / custody, not capture
 | U | Not defined there either | **No.** No meaning is assigned here |
 | Act | COMPANION.md:25 (fence 2): Act(x)=0 ≠ Stop | **No.** Act is not computed. OSR checks only the "Act = 0 ≠ Stop" consequence. The gate's A_adm is the patch-admissible action set, not Act |
 
+## Registry trust boundary: LIMIT (round 4, L #6)
+
+The `AuthorityRegistry` (token issuance record, attempt record, log-witness key
+and anchor) is an **in-process Python object**. Code running in the same
+process can reach its private records and keys (for example through `gc`) and
+forge ground truth. Forged-ground-truth mutants of that kind are **out of
+scope** for this simulation. **Chosen: stay in-process** for round 4. A
+separate-process or external authority is OWED and not built.
+
+Pinned by `test_limit_in_process_registry_compromise[S1,S2]` (control `cr`
+rewrites the registry and passes every scored metric; only completion drops)
+and `test_limit_registry_records_reachable_in_process`.
+
 ## Custody law (§5)
 
 \[
