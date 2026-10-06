@@ -513,3 +513,81 @@ certifies nothing.
 - `pi_sticky` still skips `enforceable=False` patches (AIce#1 Q3, unchanged).
 - All values are from one deterministic synthetic graph with a scripted
   compliant agent. They are not live-agent evidence, and h < 1.
+
+## Round 4 — PRE-REGISTRATION (L's blind re-review of `503a2ea`)
+
+Written and committed **before** implementing any round-4 fix or control
+(2026-10-06, after 10:01 AM PT; the git timestamp is authoritative). Synthetic.
+Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1. Fences unchanged.
+Mutation baseline re-measured on unchanged `503a2ea`: 217/233 = 93.1%, 129 tests.
+
+### Planned design
+
+- **Legitimacy becomes pass/fail.** Three new scored targets, computed from
+  the harness registry, never through the verifier the policy and ledger hold:
+  - **LEG**: fraction of recorded custody attempts (attach and supersede)
+    where the reported outcome equals registry legitimacy. Target ≥ 0.95.
+  - **HPL**: fraction of held patches with a legitimate attach. Target ≥ 0.95;
+    n/a (nothing held) fails, as SEF n/a does.
+  - **RPL**: 1 iff the keyed log verifies, the log matches the harness attempt
+    record in content and order, and replay reproduces live custody.
+    Target ≥ 0.95.
+  ASA keeps its study definition (flag ⇔ accepted) and is documented as
+  policy/ledger agreement, not legitimacy.
+- **Ground truth.** An attempt is legitimate iff the registry issued that
+  exact binding **and** the submitted credential equals the issued token.
+  Checking the issuance record directly means a token minted with a leaked
+  key is still illegitimate.
+- **Verifier closure** captures only a copy of the token key, with no reference
+  to the registry, its issuance record, or its attempt record.
+- **Harness attempt record.** Scenarios record every attach/supersede attempt
+  (as submitted, plus the outcome the ledger reported) in the registry.
+- **Keyed log.** Entries store the submitted credential. Each entry is sealed
+  with HMAC through a `LogWitness` whose key and anchor (head hash and count)
+  live outside the ledger. Replay re-verifies every entry against the registry
+  instead of trusting the `accepted` field.
+- **S2** gains an unauthorized peer attach attempt: the lock-in patch with a
+  replayed attach token, placed right before the supersession events.
+- **Limit (stated, pinned by a test).** The registry is in-process. Code that
+  can rewrite the registry's own records is out of scope for this simulation.
+  Staying in-process; not moved out of process this round.
+
+### Predicted values — shipped policy
+
+The seven existing metrics are unchanged in the demo, S1 and S2, all
+conditions. LEG = HPL = RPL = 1.000 everywhere. S2 custody log: 5 → 6
+entries, 2 → 3 refused. Completion unchanged.
+
+### Predicted control outcomes (sticky; LEG / HPL / RPL plus other caught metrics)
+
+| ID | Variant | S1 | S2 |
+|----|---------|----|----|
+| a1 | majority policy, verifying ledger | 1 / 1 / 1 (ASA 0) | pass |
+| a2 | majority-accepting ledger | 0.571 / n/a / 0 | pass (no pair reaches 3) |
+| b1 | resists correction | pass | 0.833 / 1 / 0 (ASA 0.667) |
+| b2 | silent capture | pass | 1 / 1 / 0 |
+| c | authorized by default | 1 / 1 / 1 (ASA 0) | 1 / 1 / 1 (ASA 0.333) |
+| d | global leak | 1 / 1 / 0 (FIR 0.429) | 1 / 1 / 0 (FIR 0.429) |
+| e | shallow supersession | pass | 1 / 1 / 0 |
+| f | attach without authority check | 0.857 / 0.5 / 0 | 0.833 / 0.5 / 0; completion 0.25 → 0 |
+| g | forging verifier | 0.571 / 0.0 / 0 (E_P 0.4) | 0.667 / 0.0 / 0 (E_P 0.143) |
+| t+a1 | flag-trusting ledger + majority | 0.286 / n/a / 0 | pass |
+| i, s, o | agent controls | 1 / 1 / 1 (caught as before) | 1 / 1 / 1 |
+| v | ledger drops the verifier (L) | 0.857 / 0.5 / 0 | 0.833 / 0.5 / 0 |
+| lsr | log skips refused attempts (L) | 1 / 1 / 0 | 1 / 1 / 0 |
+| lrv | log reversed, unkeyed re-chain (L) | 1 / 1 / 0 | 1 / 1 / 0 |
+| lrs | drop refused, re-seal via witness | 1 / 1 / 0 | 1 / 1 / 0 |
+| lsa | log skips accepted correction (L) | pass (not exercised) | 1 / 1 / 0 |
+| tr | token reuse across bindings (L) | 0.714 / 0.0 / 0 (E_P 0.4) | 0.667 / 0.0 / 0 (E_P 0.143) |
+| up | unlogged unauthorized peer patch (L) | 1 / 0.5 / 0 | 1 / 0.5 / 0 |
+| kf | ledger mints tokens with key from the verifier closure (L) | pass (no governing-name supersede) | 0.833 / n/a / 0 (E_P 0.143) |
+| gt | unchecked attach + forged issuance entry, no matching token (L) | 0.857 / 0.5 / 0 | 0.833 / 0.5 / 0 |
+| fgt | governing-name supersede + forged issuance entry (L) | pass (not exercised) | 0.833 / n/a / 0 (E_P 0.143) |
+| cr | compromised registry (in-process rewrite of ground truth) | **not caught** by LEG/HPL/RPL; completion 0.25 only | — |
+
+`gt`, `fgt` and `cr` need registry access, which is modelled explicitly
+(in-process leak); the shipped policy and ledger get no such reference.
+L's lint-evasion mutants (synonyms, earlier negation word, claim in a
+details field, planted text files) are predicted to fail the widened lint.
+The allowlist size is reported as measured. Mutation expectation: ≥ 90%,
+reported as measured.
