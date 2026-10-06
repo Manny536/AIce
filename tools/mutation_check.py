@@ -19,7 +19,7 @@ Usage (from repo root):
     python3 tools/mutation_check.py --json out.json --jobs 8
 
 Synthetic tooling only. Kill rate is a property of this test suite on this
-synthetic simulator; it certifies nothing (L²_C fence 3). Status: PROPOSED
+synthetic simulator. Nothing here certifies an agent or closes L²_C (fence 3). Status: PROPOSED
 systems hypothesis · efficacy OPEN · h < 1.
 """
 

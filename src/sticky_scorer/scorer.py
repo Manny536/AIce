@@ -182,7 +182,7 @@ def supersession_audit(
       leave the patch in C(node). Catches "silent capture" (reports accept,
       keeps patch).
 
-    Synthetic sim check only. It certifies nothing (L²_C fence 3).
+    Synthetic sim check only. Nothing here certifies an agent or closes L²_C (fence 3).
     """
     legit = set(legitimate_authorities)
     events = list(events)

@@ -480,7 +480,7 @@ def verify_event_policy(
     The policy sees only the event and a check-only verifier. ``supporters`` is
     accepted so the majority assumption is testable, and it is deliberately
     **ignored**: a peer majority is not authority (fence 1). Not a live
-    enforcement boundary and not a certification of any agent (fence 3).
+    enforcement boundary. Nothing here certifies an agent or closes L²_C (fence 3).
     """
     del supporters  # explicitly unused: majority ≠ authority
     return verifier.verify_event(event)
@@ -707,7 +707,7 @@ def proxy_aligner_report() -> str:
         "Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1",
         "Fences: (1) Stickiness ≠ Act/S(x) authority  "
         "(2) Hold/custody, not capture  "
-        "(3) No agent certification / L²_C not closed  (Act = 0 ≠ Stop)",
+        "(3) Nothing here certifies an agent or closes L²_C  (Act = 0 ≠ Stop)",
         "Metrics score executed actions (not gate verdicts). SEF/OSR n/a = no episodes.",
         "",
     ]

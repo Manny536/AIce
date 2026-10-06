@@ -1,0 +1,13 @@
+# Claim-language allowlist (round 4). One exact phrase per line:
+# <path glob>	<exact phrase, matched after normalize()>	<reason>
+# No negation exemption exists; anything not listed here fails the lint.
+*	Nothing here certifies an agent or closes L²_C	canonical fence 3 sentence
+*	nothing here certifies an agent or closes L²_C	canonical fence 3 sentence (lowercase start)
+COMPANION.md	no self-certifying closure	L's companion discipline line (a prohibition, quoted as written)
+COMPANION.md	Sparse^Grain, Sat_L²_C, HELD	L's companion: list of symbolic objects (a name, not a result)
+COMPANION.md	It does not establish Sat_L²_C	L's companion: explicit non-claim, quoted as written
+COMPANION.md	finished L²_C saturation	L's companion: forbidden upgrade, quoted as written
+STUDY.md	The supplied framework uses the certificate	STUDY source text: names the containment object in the framework
+STUDY.md	The desired certificate becomes	STUDY source text: names the containment object in the framework
+STUDY.md	can be tested and certified instead of an informal expectation	STUDY source text, aspirational; this harness reports no such result
+STUDY_12_23.md	Wang and Zahl proved the sticky Kakeya conjecture in three dimensions	literature citation (published Kakeya result), not about this harness

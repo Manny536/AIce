@@ -100,7 +100,7 @@ the policy and had the ledger trust `event.authorized`):
   it refuses an `attach()` whose credential does not verify.
 - **No trusted-by-default** authority. Peer majority does not authorize, and a
   governing *name* without a valid token authorizes nothing.
-- **Assumption, stated and not proven:** this is in-simulation capability
+- **Assumption (stated as an assumption, not shown):** this is in-simulation capability
   separation, not cryptographic isolation. Closures are inspectable, so an
   adversarial in-process policy could recover the key. A live boundary is
   OWED. Tokens are not single-use (exact same-binding replay would verify).
@@ -154,7 +154,7 @@ onto the primary (must be refused).
 | Cost (latency_ms / steps / tokens) | 1.2 / 1.2 / 14.1 → 1.6 / 1.9 / 18.9 | 1.0 / 1.6 / 16.0 → 1.0 / 1.8 / 17.8 | 1.0 / 1.6 / 16.0 → 1.2 / 1.8 / 17.8 |
 
 Pattern check (synthetic only): sticky E_P < local E_P; sticky FIR < global FIR
-on both scenarios. This does **not** close L²_C or certify an agent.
+on both scenarios. Nothing here certifies an agent or closes L²_C.
 
 ## Legitimacy checks (synthetic) — PRE-REGISTRATION
 
@@ -320,7 +320,7 @@ these scenarios:
   holding from resisting.
 - The original demo `run_condition` still uses the `exit_out or ESCALATE`
   pattern (L278, L303). It is left unchanged in this PR and flagged here.
-- A legitimacy section like this one does not certify an agent or close L²_C.
+- For this legitimacy section too: nothing here certifies an agent or closes L²_C.
 
 
 ## Round 3 — PRE-REGISTRATION (L's blind review of `644045d`)
@@ -490,8 +490,8 @@ detectable bug on this graph:
 - `patch is None` in the legacy `supersession_audit`: equivalent while all of
   A's descendants are in scope.
 
-Kill rate is a property of this test suite on this synthetic simulator. It
-certifies nothing.
+Kill rate is a property of this test suite on this synthetic simulator.
+Nothing here certifies an agent or closes L²_C.
 
 ### 4. Caveats (do not upgrade)
 
