@@ -465,3 +465,56 @@ def test_limit_is_stated_in_code_and_scorecard():
     assert "the registry is an in-process Python object" in doc
     assert "out of scope" in doc and "keeps the registry in-process" in doc
     assert "in-process Python object" in sc and "Chosen: stay in-process" in sc
+
+
+def _legacy_ledger(witness=None):
+    from sticky_scorer.custody import CustodyLedger
+    from sticky_scorer.simulate import build_demo_graph as build_graph
+
+    led = CustodyLedger(graph=build_graph(), condition=Condition.STICKY, witness=witness)
+    led._append("attach", "P1", "A", "gov", None, "tok1", True, "verified")
+    led._append("supersede", "P1", "A", "peer", False, None, False, "no credential")
+    led._append("supersede", "P1", "A", "gov", True, "tok2", True, "verified")
+    return led
+
+
+@pytest.mark.parametrize("field_name,value", [
+    (None, None), ("seq", 7), ("prev_hash", "f" * 64), ("accepted", True), ("hash", "0" * 64),
+])
+def test_unkeyed_chain_check_legacy_mode(field_name, value):
+    """Round 4 mutation triage: verify_log_chain is the unkeyed diagnostic for
+    ledgers without a witness (not used by the scored metrics)."""
+    from dataclasses import replace as dc_replace
+
+    led = _legacy_ledger()
+    if field_name is None:
+        assert led.verify_log_chain()
+        return
+    led._log[1] = dc_replace(led._log[1], **{field_name: value})
+    assert not led.verify_log_chain()
+
+
+def test_witness_mode_chain_check_is_seq_only():
+    from dataclasses import replace as dc_replace
+
+    from sticky_scorer.simulate import new_registry
+
+    led = _legacy_ledger(new_registry().log_witness())
+    assert led.verify_log_chain()
+    led._log[1] = dc_replace(led._log[1], seq=5)
+    assert not led.verify_log_chain()
+
+
+def test_verify_log_needs_head_and_count():
+    """A re-sealed (dropped) chain can match the anchor head but not the count."""
+    from sticky_scorer.simulate import new_registry
+
+    reg = new_registry()
+    led = _legacy_ledger(reg.log_witness())
+    assert reg.verify_log(led.log)
+    kept, led._log = [e for e in led._log if e.accepted], []
+    for e in kept:
+        led._append(e.kind, e.patch_id, e.node_id, e.authority, e.flag,
+                    e.credential, e.accepted, e.reason)
+    assert led.log[-1].hash == reg._witness._head  # head matches the re-seal
+    assert not reg.verify_log(led.log)  # count does not

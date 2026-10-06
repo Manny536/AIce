@@ -56,14 +56,23 @@ DEFAULT_TARGETS: Dict[str, Sequence[str]] = {
         "run_authorized_mistaken_premise_correction",
         "score_scenario",
         "run_proxy_aligner_scenarios",
+        "_try_attach",  # round 4
+        "_try_supersede",  # round 4
+        "_apply_audit",  # round 4
     ),
     "src/sticky_scorer/authority.py": (
         "verify",
         "verify_event",
         "issue",
         "was_issued",
-        "issued_any",
         "check",
+        "_mac",  # round 4
+        "_seal",  # round 4
+        "seal",  # round 4
+        "is_legitimate",  # round 4
+        "record_attempt",  # round 4
+        "attempt_is_legitimate",  # round 4
+        "verify_log",  # round 4
     ),
     "src/sticky_scorer/custody.py": (
         "_append",
@@ -236,11 +245,17 @@ def _copy_repo(repo: Path, dest: Path) -> None:
     ignore = shutil.ignore_patterns(
         ".git", ".venv", "__pycache__", ".pytest_cache", "*.pyc", "mutants", "tools"
     )
-    for name in ("src", "tests"):
-        shutil.copytree(repo / name, dest / name, ignore=ignore)
-    for f in ("pyproject.toml",):
-        if (repo / f).exists():
-            shutil.copy2(repo / f, dest / f)
+    # Round 4: copy every top-level entry (docs, SCORECARD, COMPANION, STUDY*)
+    # because the claim lint and the fence tests read them.
+    skip = {".git", ".venv", "__pycache__", ".pytest_cache", "mutants", "tools"}
+    dest.mkdir(parents=True, exist_ok=True)
+    for entry in repo.iterdir():
+        if entry.name in skip:
+            continue
+        if entry.is_dir():
+            shutil.copytree(entry, dest / entry.name, ignore=ignore)
+        else:
+            shutil.copy2(entry, dest / entry.name)
 
 
 def _run_tests(workdir: Path, python: str, timeout: int) -> Tuple[bool, str]:
