@@ -388,6 +388,8 @@ L_ROUND4_CAUGHT = [
     ("v", S1), ("lsr", S1), ("lsr", S2), ("lrv", S1), ("lrv", S2),
     ("lrs", S1), ("lrs", S2), ("lsa", S2), ("tr", S1), ("tr", S2), ("up", S1),
     ("up", S2), ("kf", S2), ("gt", S1), ("fgt", S2), ("f", S1),
+    # round 4 fix 3: S2 now has an unauthorized attach attempt
+    ("v", S2), ("gt", S2), ("f", S2),
 ]
 
 
@@ -419,3 +421,21 @@ def test_registry_refuses_non_governing_issuer():
 
     with pytest.raises(PermissionError):
         new_registry().issue("peer_alpha", "supersede", "P", "A")
+
+
+def test_s2_unauthorized_attach_attempt_refused_and_logged():
+    """Round 4 (L #3): S2 has an unauthorized attach attempt; shipped refuses it."""
+    reg, led, *_ = _shipped_with_registry(S2)
+    assert all("P_peer_lockin" not in led.active_at(n) for n in led.graph.nodes)
+    refused = [e for e in led.log if e.kind == "attach" and not e.accepted]
+    assert [e.patch_id for e in refused] == ["P_peer_lockin"]
+    assert [a.kind for a in reg.attempts] == ["attach", "attach", "attach",
+                                              "supersede", "supersede", "supersede"]
+
+
+def test_f_unchecked_attach_caught_in_s2_by_scored_metrics():
+    c, shipped = card(S2, "f"), card(S2, "shipped")
+    assert c.held_patch_legitimacy == 0.5
+    assert c.legitimacy_accuracy == pytest.approx(5 / 6)
+    assert c.replay_fidelity == 0.0
+    assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate

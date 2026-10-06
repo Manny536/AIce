@@ -404,7 +404,7 @@ def test_custody_audit_counts_refusals():
     s2 = score_scenario(run_authorized_mistaken_premise_correction,
                         Condition.STICKY).details["custody_audit"]
     assert (s1["n_log"], s1["n_refused"]) == (7, 6)  # 2 attaches (1 refused) + 5 refused peers
-    assert (s2["n_log"], s2["n_refused"]) == (5, 2)  # 2 attaches + 3 events (2 refused)
+    assert (s2["n_log"], s2["n_refused"]) == (6, 3)  # 3 attaches (1 refused) + 3 events (2 refused)
 
 
 def test_report_contains_both_scenarios_and_audits():
