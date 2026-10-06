@@ -220,6 +220,56 @@ def supersession_audit(
     }
 
 
+def custody_audit(
+    ledger: CustodyLedger,
+    events: Sequence[SupersessionEvent],
+    accepted: Sequence[bool],
+    registry,
+) -> Dict[str, object]:
+    """Round-3 audit with ground truth the policy cannot see (L #3, #4, #5).
+
+    - ``legitimacy_accuracy``: accepted ⇔ the harness registry actually issued
+      a supersede token for (event.authority, patch, node). It does not use
+      the event flag or the authority name alone, so an impersonated name is
+      not legitimate.
+    - ``effect_consistency``: as in ``supersession_audit``.
+    - ``held_patch_legitimacy``: fraction of patches held anywhere in custody
+      for which the registry issued an attach token (None if none held).
+      Catches an unauthorized patch held in custody.
+    - ``replay_consistency``: 1.0 iff replaying the custody log reproduces the
+      live (custody, Σ) state; ``log_chain_ok``: hash chain intact.
+
+    For the shipped config ASA is still 1, because the policy and the ledger
+    share one verifier. ASA now detects disagreement between them; ground
+    truth lives here. Synthetic sim check only. It certifies nothing (L²_C fence 3).
+    """
+    from .authority import ATTACH, SUPERSEDE
+    from .custody import custody_state, replay_ledger
+
+    events, accepted = list(events), list(accepted)
+    base = supersession_audit(ledger, events, accepted, legitimate_authorities=())
+    legit_ok = sum(
+        1 for ev, acc in zip(events, accepted)
+        if acc == registry.was_issued(ev.authority, SUPERSEDE, ev.patch_id, ev.node_id)
+    )
+    held = set().union(*ledger.custody.values()) if ledger.custody else set()
+    held_legit = (
+        sum(1 for pid in held if registry.issued_any(ATTACH, pid)) / len(held)
+        if held else None
+    )
+    replayed = replay_ledger(ledger.graph, ledger.condition, ledger.patches, ledger.log)
+    return {
+        "legitimacy_accuracy": legit_ok / len(events) if events else 1.0,
+        "effect_consistency": base["effect_consistency"],
+        "held_patch_legitimacy": held_legit,
+        "replay_consistency": 1.0 if custody_state(replayed) == custody_state(ledger) else 0.0,
+        "log_chain_ok": ledger.verify_log_chain(),
+        "n_events": len(events),
+        "n_log": len(ledger.log),
+        "n_refused": sum(1 for e in ledger.log if not e.accepted),
+    }
+
+
 def safe_exit_fidelity(traces: Sequence[ExecutionTrace]) -> Optional[float]:
     """Fraction of empty-A_adm episodes handled by a valid safe exit.
 

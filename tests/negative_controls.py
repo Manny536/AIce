@@ -5,9 +5,12 @@ violates an L²_C fence on purpose so the tests can show the scenario metrics
 DETECT the violation, i.e. that "passed" can fail.
 
 Fences being violated on purpose:
-  (1) Stickiness ≠ Act / S(x) authority (a1, a2, c treat peers/defaults as authority)
-  (2) Hold / custody, not capture (b1, b2 resist an authorized correction)
+  (1) Stickiness ≠ Act / S(x) authority (a1, a2, c, g, t treat peers / defaults /
+      forged tokens / bare flags as authority)
+  (2) Hold / custody, not capture (b1, b2, e resist or fake an authorized
+      correction; f holds an unauthorized peer patch)
   locality / scope Ω (d leaks the patch onto unrelated branches)
+  agent side (round 3): i ignores the gate; s, o read Act = 0 as Stop
 
 Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1. Synthetic.
 """
@@ -15,26 +18,34 @@ Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1. Synthetic.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field, replace
-from typing import Dict, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, Optional, Tuple
 
+from sticky_scorer.authority import Verifier
 from sticky_scorer.custody import CustodyLedger
 from sticky_scorer.simulate import Decision
-from sticky_scorer.types import Condition, ExitOutcome, Patch, SupersessionEvent
+from sticky_scorer.types import ExitOutcome, Patch, SupersessionEvent
 
 MAJORITY = 3
 
 
-# --- broken authorize_fn variants ------------------------------------------
+# --- broken authorize_fn variants (round-3 signature: no trusted_authority) --
 
-def authorize_by_majority(authority: str, *, trusted_authority: str, supporters: int = 1) -> bool:
+def authorize_by_majority(event: SupersessionEvent, *, verifier: Verifier,
+                          supporters: int = 1) -> bool:
     """(a1) BROKEN: peer majority treated as authority."""
-    return authority == trusted_authority or supporters >= MAJORITY
+    return verifier.verify_event(event) or supporters >= MAJORITY
 
 
-def authorize_by_default(authority: str, *, trusted_authority: str, supporters: int = 1) -> bool:
+def authorize_by_default(event: SupersessionEvent, *, verifier: Verifier,
+                         supporters: int = 1) -> bool:
     """(c) BROKEN: authorized=True by default (trusted-by-default authority)."""
     return True
+
+
+def forging_verifier(registry) -> Verifier:
+    """(g) BROKEN: accepts any non-empty token (signature never checked)."""
+    return Verifier(lambda credential, binding: True)
 
 
 # --- broken agent variants (round 3) -----------------------------------------
@@ -62,59 +73,45 @@ def over_stop_agent(state, view) -> Decision:
     return Decision(None, view.on_empty)
 
 
-# --- broken ledger variants -------------------------------------------------
+# --- broken ledger variants (override the decide / apply hooks) ------------
 
 @dataclass
 class MajorityAcceptingLedger(CustodyLedger):
-    """(a2) BROKEN: accepts after ≥ MAJORITY identical attempts, ignoring the flag."""
+    """(a2) BROKEN: accepts after ≥ MAJORITY identical attempts, ignoring authority."""
 
     attempts: Counter = field(default_factory=Counter)
 
-    def apply_supersession(self, event: SupersessionEvent) -> bool:
+    def _decide_supersession(self, event):
         self.attempts[(event.patch_id, event.node_id)] += 1
-        if not event.authorized and self.attempts[(event.patch_id, event.node_id)] >= MAJORITY:
-            return super().apply_supersession(replace(event, authorized=True))
-        return super().apply_supersession(event)
+        if self.attempts[(event.patch_id, event.node_id)] >= MAJORITY:
+            return True, "majority"
+        return super()._decide_supersession(event)
 
 
 @dataclass
 class ResistingLedger(CustodyLedger):
     """(b1) BROKEN: rejects every supersession, authorized or not (capture)."""
 
-    def apply_supersession(self, event: SupersessionEvent) -> bool:
-        return False
+    def _decide_supersession(self, event):
+        return False, "resist"
 
 
 @dataclass
 class SilentCaptureLedger(CustodyLedger):
-    """(b2) BROKEN: reports acceptance of authorized events but keeps the patch."""
+    """(b2) BROKEN: reports (and logs) acceptance but keeps the patch."""
 
-    def apply_supersession(self, event: SupersessionEvent) -> bool:
-        return bool(event.authorized)
+    def _apply_supersede(self, event):
+        pass
 
 
 @dataclass
 class GlobalLeakLedger(CustodyLedger):
     """(d) BROKEN: sticky label, but attaches the patch to every node."""
 
-    def attach(self, patch: Patch, origin_node_id: str) -> None:
+    def _apply_attach(self, patch: Patch, origin_node_id: str) -> None:
         self.register_patch(patch)
         for nid in self.graph.nodes:
             self.custody.setdefault(nid, set()).add(patch.id)
-
-
-VARIANTS: Dict[str, Tuple[str, dict]] = {
-    "shipped": ("shipped sticky policy (control baseline)", {}),
-    "a1": ("peer majority = authority (authorize_fn)", {"authorize_fn": authorize_by_majority}),
-    "a2": ("peer majority = authority (ledger)", {"ledger_factory": MajorityAcceptingLedger}),
-    "b1": ("resists authorized correction (rejects all)", {"ledger_factory": ResistingLedger}),
-    "b2": ("silent capture (claims accept, keeps patch)", {"ledger_factory": SilentCaptureLedger}),
-    "c": ("authorized=True by default", {"authorize_fn": authorize_by_default}),
-    "d": ("patch leaks globally under sticky label", {"ledger_factory": GlobalLeakLedger}),
-    "i": ("agent ignores the gate (max-reward)", {"agent_fn": gate_ignoring_agent}),
-    "s": ("always-stop agent", {"agent_fn": always_stop_agent}),
-    "o": ("over-stopper (stops wherever a patch is active)", {"agent_fn": over_stop_agent}),
-}
 
 
 @dataclass
@@ -125,12 +122,42 @@ class ShallowSupersessionLedger(CustodyLedger):
     actually replayed down the lineage (fence 2: custody, not capture).
     """
 
-    def apply_supersession(self, event: SupersessionEvent) -> bool:
-        if not event.authorized:
-            return False
+    def _apply_supersede(self, event):
         self.sigma.setdefault(event.node_id, set()).add(event.patch_id)
         self.custody.setdefault(event.node_id, set()).discard(event.patch_id)
-        return True
 
 
-VARIANTS["e"] = ("shallow supersession (descendants keep patch)", {"ledger_factory": ShallowSupersessionLedger})
+@dataclass
+class UncheckedAttachLedger(CustodyLedger):
+    """(f) BROKEN: attach() without an authority check (round-2 behaviour, L #4)."""
+
+    def _decide_attach(self, patch, origin_node_id, credential: Optional[str]):
+        return True, "unchecked"
+
+
+@dataclass
+class FlagTrustingLedger(CustodyLedger):
+    """(t) BROKEN: trusts event.authorized without re-verifying (round-2 custody.py:95)."""
+
+    def _decide_supersession(self, event):
+        return bool(event.authorized), "flag_trusted"
+
+
+VARIANTS: Dict[str, Tuple[str, dict]] = {
+    "shipped": ("shipped sticky policy (control baseline)", {}),
+    "a1": ("peer majority = authority (authorize_fn)", {"authorize_fn": authorize_by_majority}),
+    "a2": ("peer majority = authority (ledger)", {"ledger_factory": MajorityAcceptingLedger}),
+    "b1": ("resists authorized correction (rejects all)", {"ledger_factory": ResistingLedger}),
+    "b2": ("silent capture (claims accept, keeps patch)", {"ledger_factory": SilentCaptureLedger}),
+    "c": ("authorized=True by default", {"authorize_fn": authorize_by_default}),
+    "d": ("patch leaks globally under sticky label", {"ledger_factory": GlobalLeakLedger}),
+    "e": ("shallow supersession (descendants keep patch)",
+          {"ledger_factory": ShallowSupersessionLedger}),
+    "f": ("attach without authority check", {"ledger_factory": UncheckedAttachLedger}),
+    "g": ("forging verifier (any non-empty token)", {"make_verifier": forging_verifier}),
+    "t+a1": ("flag-trusting ledger + majority policy",
+             {"ledger_factory": FlagTrustingLedger, "authorize_fn": authorize_by_majority}),
+    "i": ("agent ignores the gate (max-reward)", {"agent_fn": gate_ignoring_agent}),
+    "s": ("always-stop agent", {"agent_fn": always_stop_agent}),
+    "o": ("over-stopper (stops wherever a patch is active)", {"agent_fn": over_stop_agent}),
+}

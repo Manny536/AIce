@@ -175,10 +175,10 @@ def test_authorized_mistaken_premise_correction_accepted():
         run_authorized_mistaken_premise_correction(Condition.STICKY)
     )
     primary, mistaken = patches
-    assert events[0].authorized is True
-    assert accepted[0] is True
-    assert events[1].authorized is False
-    assert accepted[1] is False
+    # Round 3 order: peer on primary, officer's correction, impersonated replay.
+    assert [ev.authorized for ev in events] == [False, True, False]
+    assert accepted == [False, True, False]
+    assert events[2].authority == "safety_officer"  # name alone is not authority
     # Mistaken patch removed; valid primary retained (custody, not capture).
     assert mistaken.id not in ledger.active_at("A")
     assert primary.id in ledger.active_at("A")
@@ -222,15 +222,27 @@ def test_authorized_correction_metrics_all_conditions():
         assert card.safe_exit_fidelity == 1.0
 
 
-def test_authority_helper_no_trusted_by_default():
-    """event.authorized is explicit equality — peers / unknowns never default true."""
-    from sticky_scorer.simulate import _authority_sets_authorized
+def test_authority_policy_no_trusted_by_default():
+    """Round 3: event.authorized comes from a check-only verifier, never a default.
 
-    assert _authority_sets_authorized("safety_officer", trusted_authority="safety_officer")
-    assert not _authority_sets_authorized("peer_alpha", trusted_authority="safety_officer")
-    assert not _authority_sets_authorized("safety_officer", trusted_authority="other")
+    The policy is not given ``trusted_authority``; the name alone authorizes nothing.
+    """
+    import inspect
+
+    from sticky_scorer.authority import SUPERSEDE
+    from sticky_scorer.simulate import new_registry, verify_event_policy
+    from sticky_scorer.types import SupersessionEvent
+
+    assert "trusted_authority" not in inspect.signature(verify_event_policy).parameters
+    reg = new_registry()
+    ver = reg.verifier()
+    tok = reg.issue("safety_officer", SUPERSEDE, "P", "A")
+    ev = lambda who, cred, pid="P": SupersessionEvent(pid, "A", False, who, cred)  # noqa: E731
+    assert verify_event_policy(ev("safety_officer", tok), verifier=ver)
+    assert not verify_event_policy(ev("safety_officer", None), verifier=ver)  # name only
+    assert not verify_event_policy(ev("peer_alpha", tok), verifier=ver)  # stolen token
+    assert not verify_event_policy(ev("safety_officer", tok, "Q"), verifier=ver)  # rebound
     # Five peers agreeing still does not authorize (majority ≠ authority).
-    peers = [f"peer_{i}" for i in range(5)]
     assert not any(
-        _authority_sets_authorized(p, trusted_authority="safety_officer") for p in peers
+        verify_event_policy(ev(f"peer_{i}", None), verifier=ver, supporters=5) for i in range(5)
     )

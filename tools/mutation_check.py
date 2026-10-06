@@ -42,7 +42,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 # file (relative to repo) -> functions to mutate (missing names are skipped)
 DEFAULT_TARGETS: Dict[str, Sequence[str]] = {
     "src/sticky_scorer/simulate.py": (
-        "_authority_sets_authorized",
+        "verify_event_policy",
+        "make_peer_lockin_patch",
         "make_mistaken_premise_patch",
         "compliant_agent",
         "_step",
@@ -56,11 +57,28 @@ DEFAULT_TARGETS: Dict[str, Sequence[str]] = {
         "score_scenario",
         "run_proxy_aligner_scenarios",
     ),
+    "src/sticky_scorer/authority.py": (
+        "verify",
+        "verify_event",
+        "issue",
+        "was_issued",
+        "issued_any",
+        "check",
+    ),
     "src/sticky_scorer/custody.py": (
+        "_append",
+        "verify_log_chain",
+        "_decide_attach",
+        "_attach_targets",
+        "_apply_attach",
+        "_decide_supersession",
+        "_apply_supersede",
+        "apply_supersession",
+        "replay_ledger",
+        "custody_state",
         "attach",
         "inherit_child",
         "propagate_sticky",
-        "apply_supersession",
         "verify_inheritance",
         "should_apply",
     ),
@@ -73,6 +91,7 @@ DEFAULT_TARGETS: Dict[str, Sequence[str]] = {
         "safe_exit_fidelity",
         "over_stop_rate",
         "supersession_audit",
+        "custody_audit",
     ),
     "src/sticky_scorer/admissibility.py": (
         "pi_sticky",

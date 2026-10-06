@@ -12,7 +12,8 @@ from .admissibility import (
     is_valid_safe_exit,
     pi_sticky,
 )
-from .custody import CustodyLedger
+from .authority import AuthorityRegistry, Verifier
+from .custody import CustodyLedger, LogEntry, replay_ledger
 from .scorer import (
     TARGETS,
     authorized_supersession_accuracy,
@@ -25,6 +26,7 @@ from .scorer import (
     safe_exit_fidelity,
     score_condition,
     supersession_audit,
+    custody_audit,
 )
 from .simulate import (
     build_demo_graph,
@@ -92,4 +94,9 @@ __all__ = [
     "safe_exit_fidelity",
     "score_condition",
     "supersession_audit",
+    "custody_audit",
+    "AuthorityRegistry",
+    "Verifier",
+    "LogEntry",
+    "replay_ledger",
 ]
