@@ -719,3 +719,61 @@ certifies an agent or closes L²_C.
   implements them, S(x) or Act.
 - Tokens are not single-use (an exact same-binding replay would verify).
 
+## Round 5 — PRE-REGISTRATION (separate-process authority)
+
+Written **before** the separate-process implementation and before its
+measurement. Synthetic. Status: PROPOSED systems hypothesis · efficacy OPEN ·
+h < 1. Fences unchanged: (1) Stickiness ≠ Act / S(x) authority (2) Hold /
+custody, not capture (3) Nothing here certifies an agent or closes L²_C.
+Act = S·H·U stays unimplemented.
+
+Round 4 pinned `cr`: an in-process rewrite of the registry's ground truth
+passes every scored metric. This round moves the **shipped** harness
+registry into its own process. The scored process (policy and ledger) gets a
+verifier and a log witness that forward checks and seals. Issuance record,
+attempt record, token key, and witness key stay in the authority process.
+
+### What `cr` becomes
+
+`cr` no longer substitutes a local registry. The scored process loosens its
+own verifier so `P_peer_lockin` verifies, and the ledger accepts that
+result. It cannot edit the authority process. Scoring still reads legitimacy
+from that process.
+
+### Predicted shipped policy
+
+Demo, S1, and S2, all conditions: the ten scored metrics stay at the round-4
+values, including LEG = HPL = RPL = 1.000. The transport is not a new
+behavior.
+
+### Predicted `cr` (sticky)
+
+| | LEG | HPL | RPL | Six study metrics | Completion |
+|---|---:|---:|---:|---|---|
+| S1 | 6/7 ≈ 0.857 | 0.500 | 0 | still pass (E_P stays 0) | 0.50 → 0.25 |
+| S2 | 5/6 ≈ 0.833 | 0.500 | 0 | still pass | 0.25 → 0 |
+
+Caught by LEG, HPL, and RPL. The six study metrics stay blind to this
+accept, as they were to `f`.
+
+### Predicted neighbors
+
+- `gt` and `fgt` still accept locally. Their write into a parent `_issued`
+  list does not exist on the shipped registry, so the forge does not enter
+  the authority process. They still fail LEG / HPL / RPL on the scenarios
+  that exercise them (same round-4 catches).
+- `kf` minted with a key taken from the verifier. That key is not in the
+  scored process, so the mint does not happen. S1 and S2 `kf` pass the
+  scored metrics. The attack is inert, not undetected.
+- Direct `AuthorityRegistry()` remains available to unit tests. It is not
+  what `new_registry()` returns.
+
+### Limit this round does not close
+
+Tokens are still not single-use. A caller that can operate the authority
+process from outside this split is out of scope. This is not a live boundary.
+Nothing here certifies an agent or closes L²_C.
+
+Mutation expectation: the existing AST targets stay ≥ 90%. The new process
+boundary is pinned by tests, not by that mutator. Reported as measured.
+
