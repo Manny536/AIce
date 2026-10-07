@@ -18,13 +18,14 @@ Roles are split:
 - ``LogWitness`` seals custody-log entries with a separate HMAC key and keeps
   the anchor (head hash and count) outside the ledger.
 
-LIMIT (stated plainly, pinned by
-``tests/test_negative_controls.py::test_limit_in_process_registry_compromise``):
-the registry is an in-process Python object. Code running in the same process
-can reach its private records and keys (for example through ``gc``) and
-forge ground truth. That is out of scope for this simulation. Round 4 keeps
-the registry in-process; a separate-process or external authority is OWED.
-Tokens are not single-use.
+Round 4 limit, kept as history: a directly constructed ``AuthorityRegistry``
+is an in-process object. Code in that process can reach its private records.
+
+Round 5 ships the harness registry through ``new_registry()``, which keeps
+the issuance record, the attempt record, and both keys in a separate process.
+The scored process cannot edit that ground truth by rewriting a parent
+object. Tokens are not single-use. A caller that can operate the authority
+process from outside this split is still out of scope.
 
 Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1. Fences:
 (1) Stickiness ≠ Act / S(x) authority (2) Hold / custody, not capture

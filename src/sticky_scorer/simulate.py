@@ -54,6 +54,7 @@ from typing import Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 from .admissibility import admissible_actions, pi_sticky
 from .authority import ATTACH, SUPERSEDE, AuthorityRegistry, Verifier
+from .authority_host import RemoteAuthority
 from .custody import CustodyLedger
 from .scorer import custody_audit, format_scorecard_table, score_condition
 from .types import (
@@ -430,9 +431,13 @@ TRUSTED_AUTHORITY = "safety_officer"
 FORGED_TOKEN = "f" * 64  # well-formed but not issued by the registry
 
 
-def new_registry() -> AuthorityRegistry:
-    """Harness-side ground truth (round 3, L #3). Never passed to the policy."""
-    return AuthorityRegistry(governing={TRUSTED_AUTHORITY})
+def new_registry() -> RemoteAuthority:
+    """Harness-side ground truth (round 5). Never passed to the policy.
+
+    The registry lives in a separate process. Direct ``AuthorityRegistry()``
+    is the older in-process object and is not this path.
+    """
+    return RemoteAuthority(governing=[TRUSTED_AUTHORITY])
 
 
 def make_peer_lockin_patch() -> Patch:
