@@ -3,7 +3,7 @@
 
 Same generic operators and the same full test suite as mutation_check.py; only
 the target list differs. Pre-registered prediction (tests/opto_expected.json):
-kill rate >= 80%. This is a prediction, not a pass threshold.
+kill rate >= 80% (round 1), >= 85% (round 2). This is a prediction, not a pass threshold.
 
 Synthetic tooling only. Nothing here certifies an agent or closes L²_C.
 Status: STRUCTURAL ANALOGY / PROPOSED · efficacy OPEN · h < 1.
@@ -19,10 +19,13 @@ import mutation_check  # noqa: E402
 
 OPTO_TARGETS = {
     "src/sticky_scorer/opto_probe.py": (
-        "_deny", "make_patches", "lineage", "candidates", "build_graph", "add_successors",
-        "enforcing", "wrapped", "gate_ignoring_agent", "hooked_inherit", "handoff_live",
-        "handoff_replay", "admit", "_checkpoint", "_digest", "_diff", "run_probe",
-        "do_handoff", "_tags", "evaluate", "detected", "run_key", "run_matrix",
+        "_deny", "phi", "make_patches", "lineage", "cset_for", "candidates", "action_universe",
+        "build_graph", "successor_parents", "add_successors",
+        "record_attempt", "attempt_is_legitimate", "entry_is_legitimate", "verifier", "check",
+        "new_probe_registry", "enforcing", "wrapped", "gate_ignoring_agent", "hooked_inherit",
+        "handoff_live", "handoff_replay", "admit", "_checkpoint", "_digest", "_diff", "run_probe",
+        "do_handoff", "_tags", "denied_mismatches", "evaluate", "detected", "run_key",
+        "is_control", "run_matrix",
     ),
 }
 

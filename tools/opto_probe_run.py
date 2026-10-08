@@ -36,7 +36,8 @@ def main() -> int:
     for key in sorted(out):
         r, res, vs_ref = out[key]
         mis += bool(res["action_mismatches"] or res["accept_mismatch"])
-        row = {"key": key, "actions": r.actions, "accept": r.accept,
+        row = {"key": key, "actions": r.actions, "accept": r.accept, "denied": r.denied,
+               "consumed_tokens": r.consumed_tokens,
                "events": [asdict(e) for e in r.events], "fidelity_diff": r.fidelity_diff,
                "snapshot_unchanged": r.snapshot_unchanged,
                "ablation_before_rescue": r.ablation_before_rescue, "context": r.context,
