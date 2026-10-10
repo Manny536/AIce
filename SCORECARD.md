@@ -48,12 +48,13 @@ The `AuthorityRegistry` (token issuance record, attempt record, log-witness key
 and anchor) is an **in-process Python object**. Code running in the same
 process can reach its private records and keys (for example through `gc`) and
 forge ground truth. Forged-ground-truth mutants of that kind are **out of
-scope** for this simulation. **Chosen: stay in-process** for round 4. A
-separate-process or external authority is OWED and not built.
+scope** for that round. **Chosen: stay in-process** for round 4. Round 5
+builds the separate-process path for the shipped registry. A caller that
+can operate the authority process from outside that split is still out of scope.
 
-Pinned by `test_limit_in_process_registry_compromise[S1,S2]` (control `cr`
-rewrites the registry and passes every scored metric; only completion drops)
-and `test_limit_registry_records_reachable_in_process`.
+Pinned, for round 4, by the then-current `cr` control. Round 5 moves the
+shipped registry to a separate process. See the round 5 section. `cr` now
+fails LEG, HPL, and RPL.
 
 ## Custody law (§5)
 
@@ -718,4 +719,102 @@ certifies an agent or closes L²_C.
 - H and U are not defined anywhere in this repo or its threads; nothing here
   implements them, S(x) or Act.
 - Tokens are not single-use (an exact same-binding replay would verify).
+
+## Round 5 — PRE-REGISTRATION (separate-process authority)
+
+Written **before** the separate-process implementation and before its
+measurement. Synthetic. Status: PROPOSED systems hypothesis · efficacy OPEN ·
+h < 1. Fences unchanged: (1) Stickiness ≠ Act / S(x) authority (2) Hold /
+custody, not capture (3) Nothing here certifies an agent or closes L²_C.
+Act = S·H·U stays unimplemented.
+
+Round 4 pinned `cr`: an in-process rewrite of the registry's ground truth
+passes every scored metric. This round moves the **shipped** harness
+registry into its own process. The scored process (policy and ledger) gets a
+verifier and a log witness that forward checks and seals. Issuance record,
+attempt record, token key, and witness key stay in the authority process.
+
+### What `cr` becomes
+
+`cr` no longer substitutes a local registry. The scored process loosens its
+own verifier so `P_peer_lockin` verifies, and the ledger accepts that
+result. It cannot edit the authority process. Scoring still reads legitimacy
+from that process.
+
+### Predicted shipped policy
+
+Demo, S1, and S2, all conditions: the ten scored metrics stay at the round-4
+values, including LEG = HPL = RPL = 1.000. The transport is not a new
+behavior.
+
+### Predicted `cr` (sticky)
+
+| | LEG | HPL | RPL | Six study metrics | Completion |
+|---|---:|---:|---:|---|---|
+| S1 | 6/7 ≈ 0.857 | 0.500 | 0 | still pass (E_P stays 0) | 0.50 → 0.25 |
+| S2 | 5/6 ≈ 0.833 | 0.500 | 0 | still pass | 0.25 → 0 |
+
+Caught by LEG, HPL, and RPL. The six study metrics stay blind to this
+accept, as they were to `f`.
+
+### Predicted neighbors
+
+- `gt` and `fgt` still accept locally. Their write into a parent `_issued`
+  list does not exist on the shipped registry, so the forge does not enter
+  the authority process. They still fail LEG / HPL / RPL on the scenarios
+  that exercise them (same round-4 catches).
+- `kf` minted with a key taken from the verifier. That key is not in the
+  scored process, so the mint does not happen. S1 and S2 `kf` pass the
+  scored metrics. The attack is inert, not undetected.
+- Direct `AuthorityRegistry()` remains available to unit tests. It is not
+  what `new_registry()` returns.
+
+### Limit this round does not close
+
+Tokens are still not single-use. A caller that can operate the authority
+process from outside this split is out of scope. This is not a live boundary.
+Nothing here certifies an agent or closes L²_C.
+
+Mutation expectation: the existing AST targets stay ≥ 90%. The new process
+boundary is pinned by tests, not by that mutator. Reported as measured.
+
+## Round 5 — RESULTS (separate-process authority)
+
+Measured after the pre-registration commit on this branch. Synthetic.
+Status: PROPOSED systems hypothesis · efficacy OPEN · h < 1. Fences unchanged.
+`new_registry()` now returns a handle whose issuance record, attempt record,
+token key, and witness key live in a child process. The scored process gets
+a forwarding verifier and a forwarding witness.
+
+### Pre-registered vs measured
+
+| Item | Predicted | Measured |
+|---|---|---|
+| Shipped demo, S1, S2, all conditions | ten scored metrics unchanged, LEG = HPL = RPL = 1 | unchanged. Full suite **196 passed** |
+| cr S1 | LEG 6/7, HPL 0.5, RPL 0, six metrics pass, completion 0.50 → 0.25 | match |
+| cr S2 | LEG 5/6, HPL 0.5, RPL 0, six metrics pass, completion 0.25 → 0 | match |
+| gt, fgt | still fail LEG / HPL / RPL where exercised; forge does not enter the child | match. Their local `_issued` write finds no list |
+| kf S1 and S2 | scored metrics pass; mint does not happen | match |
+| Mutation on the round-4 AST targets | ≥ 90% | **246/262 = 93.9%** |
+
+The 16 survivors are the round-4 set (equivalent or cosmetic on this graph).
+`authority_host.py` is not in that mutator. The boundary is pinned by
+`test_separate_process_compromise_fails_legitimacy`,
+`test_shipped_registry_records_are_not_in_the_scored_process`, and
+`test_shipped_verifier_holds_no_token_key`. One extra in-process class test
+pins that a correct MAC for an unissued binding is not legitimate. That test
+is what keeps `is_legitimate`'s issued-check mutant killed. The shipped
+verifier has no key, so it cannot mint that MAC itself.
+
+### Caveats (do not upgrade)
+
+- This split is a process boundary inside one machine, reached by a local
+  pipe. It is not a live authority and not an external principal.
+- Tokens are still not single-use.
+- A caller that can operate the authority process from outside this split
+  is out of scope.
+- `cr` is caught by LEG, HPL, and RPL. The six study metrics still pass.
+- Direct `AuthorityRegistry()` is still an in-process object. The shipped
+  demo and scenarios do not use it.
+- Nothing here certifies an agent or closes L²_C.
 
