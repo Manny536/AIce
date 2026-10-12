@@ -111,6 +111,14 @@ class RemoteAuthority:
     def __init__(self, governing: Sequence[str]):
         self._rid = int(host().call("open", governing=list(governing)))
         self._patches: list = []
+        self._closed = False
+
+    def close(self) -> None:
+        """Drop this registry from the shared authority child."""
+        if self._closed:
+            return
+        self._closed = True
+        host().call("close", rid=self._rid)
 
     def issue(self, principal: str, action: str, patch_id: str, node_id: str) -> str:
         return host().call(
@@ -221,6 +229,9 @@ def _dispatch(registries: dict, req: dict) -> Any:
     op = req["op"]
     if op == "open":
         return None  # assigned by the caller so the id and the object stay paired
+    if op == "close":
+        registries.pop(req["rid"], None)
+        return None
     reg: AuthorityRegistry = registries[req["rid"]]
     if op == "issue":
         return reg.issue(req["principal"], req["action"], req["patch_id"], req["node_id"])
