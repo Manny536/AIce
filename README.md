@@ -19,6 +19,7 @@ First runnable scorer for sticky patch custody metrics (study §§15–19).
 |------|------|
 | `src/sticky_scorer/` | Python package: types, custody `C(v) ⊇ C(u) \\ Σ(v)`, Π_sticky gate, metrics, synthetic demo |
 | `tests/test_scorer.py` | Asserts H1 (sticky \(E_P\) < local) and H4 (sticky FIR < global) on the demo graph |
+| `docs/PEAICE-AICE-OPTO-PROBE-001.md` | AIce#5 opto probe: selective intervention on correction custody, next-action checkpoints (`src/sticky_scorer/opto_probe.py`, `tests/test_opto_probe.py`) |
 | `SCORECARD.md` | One-page metric definitions, formulas, pass/fail targets |
 | `pyproject.toml` / `requirements.txt` | Packaging (stdlib runtime; pytest for tests) |
 
