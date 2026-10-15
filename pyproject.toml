@@ -14,10 +14,12 @@ keywords = ["alignment", "sticky-custody", "patch", "L2", "AIce"]
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+model = ["numpy>=1.24"]
+dev = ["pytest>=7.0", "numpy>=1.24"]
 
 [project.scripts]
 sticky-scorer = "sticky_scorer.__main__:main"
+aice = "aice_model.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

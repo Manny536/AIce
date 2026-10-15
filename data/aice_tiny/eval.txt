@@ -1,0 +1,7 @@
+This separate authored evaluation text measures next-byte prediction. Its loss is not a measure of agent safety.
+
+When execution moves into a finer child state, applicable governing corrections should travel with the state. The system should keep evidence of authorized replacements. A strong reward should not make an inadmissible candidate executable.
+
+Neural weights encode learned statistical relationships. An external custody ledger records active corrections and their lineage. The host must check the ledger before an action crosses the dispatch boundary.
+
+An execution receipt distinguishes a proposed action from a handler that actually ran. Missing custody or an unknown action returns an unresolved result. Model ranking happens only among candidates admitted by the governing predicates.
