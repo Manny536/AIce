@@ -1,0 +1,195 @@
+{
+  "model": "AIce-Tiny-v0",
+  "status": "EXPERIMENTAL; efficacy OPEN",
+  "config": {
+    "context": 128,
+    "width": 64,
+    "heads": 4,
+    "layers": 2,
+    "seed": 7
+  },
+  "parameters": 141570,
+  "steps": 4000,
+  "batch_size": 4,
+  "learning_rate": 0.003,
+  "numpy_version": "2.3.5",
+  "tokenizer": "aice-utf8-byte-v1",
+  "train_sha256": "5dfe125eb3f4f3b77ca122899aa011f75e9655ae27a1cf553e13c9be2320f7a4",
+  "eval_sha256": "6a318233497c0a3f64d54d0451b4ec3b816afab98b36fea16131e336f2c1466f",
+  "train_bytes": 4041,
+  "eval_bytes": 801,
+  "initial_train_loss": 5.551955631092399,
+  "initial_eval_loss": 5.552167756885653,
+  "history": [
+    {
+      "step": 1,
+      "batch_loss": 5.550643106768588
+    },
+    {
+      "step": 100,
+      "batch_loss": 2.5595738454861614
+    },
+    {
+      "step": 200,
+      "batch_loss": 2.3650120691614025
+    },
+    {
+      "step": 300,
+      "batch_loss": 2.285408709112658
+    },
+    {
+      "step": 400,
+      "batch_loss": 2.1669491922437
+    },
+    {
+      "step": 500,
+      "batch_loss": 2.1088886175630854
+    },
+    {
+      "step": 600,
+      "batch_loss": 1.7821634445333359
+    },
+    {
+      "step": 700,
+      "batch_loss": 1.7214724829489605
+    },
+    {
+      "step": 800,
+      "batch_loss": 1.506858891951671
+    },
+    {
+      "step": 900,
+      "batch_loss": 1.23190479638718
+    },
+    {
+      "step": 1000,
+      "batch_loss": 0.8810574778503533
+    },
+    {
+      "step": 1100,
+      "batch_loss": 0.7823029292088042
+    },
+    {
+      "step": 1200,
+      "batch_loss": 0.5864952239883972
+    },
+    {
+      "step": 1300,
+      "batch_loss": 0.5365298702443138
+    },
+    {
+      "step": 1400,
+      "batch_loss": 0.4093490334488974
+    },
+    {
+      "step": 1500,
+      "batch_loss": 0.33618447951803376
+    },
+    {
+      "step": 1600,
+      "batch_loss": 0.42456926233056036
+    },
+    {
+      "step": 1700,
+      "batch_loss": 0.25384178170626104
+    },
+    {
+      "step": 1800,
+      "batch_loss": 0.27579724592317933
+    },
+    {
+      "step": 1900,
+      "batch_loss": 0.24918341613782183
+    },
+    {
+      "step": 2000,
+      "batch_loss": 0.2819309163019236
+    },
+    {
+      "step": 2100,
+      "batch_loss": 0.2104769411923544
+    },
+    {
+      "step": 2200,
+      "batch_loss": 0.24305794260867075
+    },
+    {
+      "step": 2300,
+      "batch_loss": 0.22064434293799562
+    },
+    {
+      "step": 2400,
+      "batch_loss": 0.19845032139169197
+    },
+    {
+      "step": 2500,
+      "batch_loss": 0.18515903547839402
+    },
+    {
+      "step": 2600,
+      "batch_loss": 0.21697104439893758
+    },
+    {
+      "step": 2700,
+      "batch_loss": 0.1416269690282808
+    },
+    {
+      "step": 2800,
+      "batch_loss": 0.1877962255461728
+    },
+    {
+      "step": 2900,
+      "batch_loss": 0.11654948293491321
+    },
+    {
+      "step": 3000,
+      "batch_loss": 0.15911839094646943
+    },
+    {
+      "step": 3100,
+      "batch_loss": 0.16463313051506184
+    },
+    {
+      "step": 3200,
+      "batch_loss": 0.11346431697194034
+    },
+    {
+      "step": 3300,
+      "batch_loss": 0.1788943847547878
+    },
+    {
+      "step": 3400,
+      "batch_loss": 0.1467339097495387
+    },
+    {
+      "step": 3500,
+      "batch_loss": 0.1345918866545021
+    },
+    {
+      "step": 3600,
+      "batch_loss": 0.18649976547098351
+    },
+    {
+      "step": 3700,
+      "batch_loss": 0.15193021821041464
+    },
+    {
+      "step": 3800,
+      "batch_loss": 0.10748791790521614
+    },
+    {
+      "step": 3900,
+      "batch_loss": 0.1251661631923634
+    },
+    {
+      "step": 4000,
+      "batch_loss": 0.12531428546712242
+    }
+  ],
+  "final_train_loss": 0.17989431323655497,
+  "final_eval_loss": 5.437067598715291,
+  "checkpoint_sha256": "7255d49012f6fc89d0c10f423b953a83a7dd7d3286be0ca89f3819ae79039949",
+  "optimizer_state_saved": false,
+  "loss_unit": "nats_per_next_token",
+  "selection": "NOT_SELECTED: held-out loss worse than the smaller checkpoint; candidate weights not included in package"
+}

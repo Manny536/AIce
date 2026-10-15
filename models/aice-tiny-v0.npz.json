@@ -1,0 +1,83 @@
+{
+  "model": "AIce-Tiny-v0",
+  "status": "EXPERIMENTAL; efficacy OPEN",
+  "config": {
+    "context": 64,
+    "width": 32,
+    "heads": 4,
+    "layers": 2,
+    "seed": 7
+  },
+  "parameters": 44290,
+  "steps": 1200,
+  "batch_size": 4,
+  "learning_rate": 0.003,
+  "numpy_version": "2.3.5",
+  "tokenizer": "aice-utf8-byte-v1",
+  "train_sha256": "5dfe125eb3f4f3b77ca122899aa011f75e9655ae27a1cf553e13c9be2320f7a4",
+  "eval_sha256": "6a318233497c0a3f64d54d0451b4ec3b816afab98b36fea16131e336f2c1466f",
+  "train_bytes": 4041,
+  "eval_bytes": 801,
+  "initial_train_loss": 5.5486503755503245,
+  "initial_eval_loss": 5.549117517308718,
+  "history": [
+    {
+      "step": 1,
+      "batch_loss": 5.552062221886091
+    },
+    {
+      "step": 100,
+      "batch_loss": 2.669337960112691
+    },
+    {
+      "step": 200,
+      "batch_loss": 2.3957002693996645
+    },
+    {
+      "step": 300,
+      "batch_loss": 2.3332067850104625
+    },
+    {
+      "step": 400,
+      "batch_loss": 2.2997359720059882
+    },
+    {
+      "step": 500,
+      "batch_loss": 2.1734970231626614
+    },
+    {
+      "step": 600,
+      "batch_loss": 2.1440247357607554
+    },
+    {
+      "step": 700,
+      "batch_loss": 1.912870533935289
+    },
+    {
+      "step": 800,
+      "batch_loss": 1.893995325594874
+    },
+    {
+      "step": 900,
+      "batch_loss": 1.990114104049293
+    },
+    {
+      "step": 1000,
+      "batch_loss": 1.5486869407277026
+    },
+    {
+      "step": 1100,
+      "batch_loss": 1.6344792933197778
+    },
+    {
+      "step": 1200,
+      "batch_loss": 1.3307639601530128
+    }
+  ],
+  "final_train_loss": 1.476211111135194,
+  "final_eval_loss": 2.4282146431463243,
+  "checkpoint_sha256": "dda139a3f4ea27da8c7295ecba94b6898eb5df096c8aa45673ec4c489eed42e7",
+  "optimizer_state_saved": false,
+  "loss_unit": "nats_per_next_token",
+  "selection": "Selected over the larger 4000-step candidate for lower held-out loss; free-text quality remains limited"
+}
