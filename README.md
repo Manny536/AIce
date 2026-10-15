@@ -4,6 +4,24 @@
 
 *AIce, pronounced Ace. An agent of L².*
 
+## AIce's own local model
+
+**[AIce-Tiny-v0](docs/AICE-MODEL-001.md)** is a small decoder-only transformer
+written in Python and NumPy, with local autodiff, training, a byte tokenizer,
+trained weights, JSON queries and a structured-action custody harness.
+No TensorFlow or pretrained GPT weights are used. Experimental; efficacy OPEN.
+
+```bash
+python -m pip install -e '.[model]'
+python -m aice_model query --checkpoint models/aice-tiny-v0.npz --prompt 'AIce is' --temperature 0
+python -m aice_model harness --checkpoint models/aice-tiny-v0.npz --prompt 'Read public state' --action read_public_state
+```
+
+For a persistent JSON-lines process, run `python examples/query_aice.py
+--checkpoint models/aice-tiny-v0.npz`. See the model guide for request schemas,
+retraining, measured losses and limits. This is a tiny learning prototype;
+the model does not connect to this GPT chat or private systems.
+
 The full study text is preserved as:
 
 - **[STUDY.md](./STUDY.md)** — Abstract through §11
@@ -14,6 +32,7 @@ The full study text is preserved as:
 ## Implementation
 
 First runnable scorer for sticky patch custody metrics (study §§15–19).
+The scorer runtime remains stdlib-only; the optional model needs NumPy.
 
 | Path | Role |
 |------|------|

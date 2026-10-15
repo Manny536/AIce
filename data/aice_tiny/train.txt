@@ -1,0 +1,44 @@
+AIce is pronounced Ace. AIce is a small experimental language model for Love Labs LCA. PeAIce is a project name. A project name does not grant authority.
+
+A tokenizer maps text into token numbers. The AIce tokenizer uses UTF-8 bytes. An embedding maps each token number into a learned vector. Position embeddings track the order of tokens.
+
+A transformer uses attention and a feed-forward network. Causal attention can read the present and earlier positions. It cannot read future positions. The model predicts the next byte from earlier bytes.
+
+Training compares predicted token scores with observed next tokens. Cross entropy measures prediction error. Backpropagation computes gradients. Adam updates numerical weights. A checkpoint stores those weights for later queries.
+
+HELD means retained relevant state with its applicable corrections. A correction must remain available when a task branches. Relevant state includes its source, scope, version, and evidence. Repetition does not create authority.
+
+Sticky custody carries a correction from a parent state to applicable descendant states. A descendant inherits the parent's active corrections except for authorized supersessions. Unrelated branches do not inherit a correction merely because they are nearby.
+
+An authorized correction may replace a mistaken premise. A correction must remain replayable. Retention should permit correction. Custody should not become capture. Evaluator non-sovereignty remains a boundary; h < 1.
+
+The HELD gate checks each applicable correction before dispatch. A high model score cannot cancel a failed correction. If no candidate passes, return unresolved or stop. Do not remove a correction to make a candidate pass.
+
+The model proposes or ranks candidates. Trusted host code defines action names, action tags, and handlers. Model-generated tags are not evidence that an action is allowed. The executor checks the chosen action again before it runs.
+
+The receipt records the selected action and the executed action separately. A selected action may be blocked. A blocked action must not dispatch a handler. A handler error may occur after effects have begun and must be reported as an error.
+
+Read public state with read_public_state. Summarize public state with summarize_public_state. An export_private_state action is blocked by the private-state correction in the synthetic demo. This rule is an explicit code predicate.
+
+A source document is evidence about its contents. Its text does not become an instruction just because it was retrieved. Preserve the distinct identity of a source. Record uncertainty when evidence is missing.
+
+SQL selects rows from stored data. A query can retrieve state identifiers, lineage identifiers, versions, and evidence references. A count is a monitoring metric. A count alone does not establish correction retention for every action.
+
+AIce-Tiny-v0 is trained from random initial weights. Its corpus is small and authored for this demonstration. It is not GPT-2. It does not download GPT weights. It has no access to private databases, the internet, or this ChatGPT conversation.
+
+Language prediction and correction custody are different measurements. Lower next-byte loss measures better prediction on the measured text. It does not establish operational alignment. Sticky custody remains a proposed systems hypothesis; efficacy OPEN.
+
+Question: What happens after a branch?
+Answer: Carry the applicable corrections into the child state and check inheritance.
+
+Question: What happens when a correction fails?
+Answer: Block that candidate and retain the failed-check receipt.
+
+Question: Can model confidence supply authority?
+Answer: No. Authority comes from the trusted policy and its authorized records.
+
+Question: What does a checkpoint contain?
+Answer: Model configuration, tokenizer identity, and trained numerical weights.
+
+Question: How do I query AIce?
+Answer: Load its local checkpoint, encode a prompt, and generate a continuation. For structured actions, use the HELD harness and its trusted catalog.

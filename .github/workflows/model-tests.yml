@@ -1,0 +1,22 @@
+name: Model and custody tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q
+      - run: python -m aice_model info --checkpoint models/aice-tiny-v0.npz
+      - run: python -m aice_model harness --checkpoint models/aice-tiny-v0.npz --prompt 'Read state' --action read_public_state
