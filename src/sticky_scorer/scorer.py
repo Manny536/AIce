@@ -246,9 +246,9 @@ def custody_audit(
     Diagnostics: ``effect_consistency`` and the RPL components.
 
     ASA keeps its study definition (flag ⇔ accepted). It measures agreement
-    between policy and ledger, not legitimacy. LIMIT: the registry is
-    in-process, so in-process code that rewrites its records is not caught.
-    Synthetic sim check only.
+    between policy and ledger, not legitimacy. Round 5: the shipped registry
+    is a separate process, so a rewrite of parent-process objects is not the
+    issuance record. Synthetic sim check only.
     """
     from .authority import ATTACH
     from .custody import custody_state, replay_ledger
