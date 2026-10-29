@@ -249,7 +249,7 @@ Result of the run on the commit that has the invariant-branch tests and the pinn
 
 The 35 survivors, grouped:
 
-- Default values that are overwritten before use, so the mutant behaves the same (probably equivalent, not proven so): `False` in `init_state`, `_blank`, `_write`, `_duplicate` (`saw_exists`) and the `make_spec` defaults.
+- Default values that are overwritten before use, so the mutant behaves the same (probably equivalent, not checked one by one): `False` in `init_state`, `_blank`, `_write`, `_duplicate` (`saw_exists`) and the `make_spec` defaults.
 - Adapter bookkeeping that the guard and the 326/65/65 comparison do not reach in this form: the `build_graph` root and other-branch nodes, `propagate_sticky` after each event, `consumed.add` and `ever_attached.add`, and two `and`/`or` in `differences` and `reachable_registry_states`.
 - Explorer bookkeeping (`counterexamples.setdefault`, `deadlocks.append`, the progress condition): the pinned sizes do not see these.
 - Two `return False` branches (`_release_backed`, `inv_I4`) and a few `and`/`or` in `evidence_sufficient`, `authority_ok`, `_commit_check`, `_commit_put`: no test builds a state that reaches them. These are the real gaps and are OPEN.
