@@ -61,4 +61,6 @@ def _run_tests(workdir: Path, python: str, timeout: int):
 if __name__ == "__main__":
     mutation_check.DEFAULT_TARGETS = CONCURRENCY_TARGETS
     mutation_check._run_tests = _run_tests
-    raise SystemExit(mutation_check.main(sys.argv[1:] or ["--timeout", "240"]))
+    # The 240 s default goes first so it applies even when other options are
+    # given; argparse keeps the last value, so an explicit --timeout still wins.
+    raise SystemExit(mutation_check.main(["--timeout", "240", *sys.argv[1:]]))
