@@ -291,7 +291,7 @@
     "no_idempotent_commit": {"config": "race", "must_violate": ["I2"], "issue_flaw": "no idempotent commit"},
     "non_atomic_commit": {"config": "race", "must_violate": ["I2"], "issue_flaw": "simultaneous read/modify/write on the store (check and put are separate steps)"},
     "blank_as_inactive": {"config": "blank", "must_violate": ["I1", "I3"], "issue_flaw": "blank activity treated as inactive"},
-    "future_as_active": {"config": "future", "must_violate": ["I1"], "issue_flaw": "future date counted active"},
+    "future_as_active": {"config": "future_only", "must_violate": ["I1"], "issue_flaw": "future date counted active"},
     "stale_overwrites": {"config": "bump", "must_violate": ["I5"], "issue_flaw": "stale commit overwriting newer"},
     "trust_authorized_flag": {"config": "authority", "must_violate": ["I4"], "issue_flaw": "authorized=true field accepted as authority"},
     "no_recall": {"config": "recall", "must_violate": ["I4"], "issue_flaw": "a correction after release leaves the release standing"},
@@ -302,10 +302,11 @@
     "scope_blind_holds": {"config": "leak", "must_violate": ["U1"], "issue_flaw": "a correction for another seat blocks this seat (custody leakage across branches)"}
   },
   "explore_configs": {
-    "_how_to_read": "Each configuration lists the fixture snapshot set, the environment events that may fire (each at most once, in any order), whether a crash may occur (at most once), and whether the optimizer may attach scope-mismatched evidence.",
+    "_resized": "After the first run of the model the configurations future_only, versions_crash, authority_dup and authority_scope were added and full_versions and full_authority were split, because the original two exceeded the state bound set for the test run (1.5 million states) and the future_as_active variant pointed at a snapshot that already had a valid active row. Expected outcomes for schedules and variants were not changed.", "_how_to_read": "Each configuration lists the fixture snapshot set, the environment events that may fire (each at most once, in any order), whether a crash may occur (at most once), and whether the optimizer may attach scope-mismatched evidence.",
     "race": {"snapshots": "SN_OLD", "events": [], "crash": false, "mismatch": false},
     "blank": {"snapshots": "SN_BLANK", "events": [], "crash": false, "mismatch": false},
     "future": {"snapshots": "SN_FUTURE_AND_ACTIVE", "events": [], "crash": false, "mismatch": false},
+    "future_only": {"snapshots": "SN_FUTURE", "events": [], "crash": false, "mismatch": false},
     "bump": {"snapshots": "SN_OLD_THEN_ACTIVE", "events": ["PublishSnapshot(2)"], "crash": false, "mismatch": false},
     "authority": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Supersede(S_good)", "Supersede(S_flag)", "Supersede(S_peer)", "Supersede(S_stale)"], "crash": false, "mismatch": false},
     "recall": {"snapshots": "SN_OLD", "events": ["Correct(K1)"], "crash": false, "mismatch": false},
@@ -315,8 +316,10 @@
     "report": {"snapshots": "SN_BLANK", "events": [], "crash": false, "mismatch": false},
     "leak": {"snapshots": "SN_OLD", "events": ["Correct(K2)"], "crash": false, "mismatch": false},
     "full_crash_hold": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Supersede(S_good)"], "crash": true, "mismatch": false},
-    "full_versions": {"snapshots": "SN_OLD_THEN_ACTIVE", "events": ["PublishSnapshot(2)", "UpdatePolicy(2)", "Correct(K1)"], "crash": true, "mismatch": false},
-    "full_authority": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Correct(K1_dup)", "Correct(K2)", "Correct(K3)", "Supersede(S_good)", "Supersede(S_auditor)", "Supersede(S_flag)", "Supersede(S_peer)", "Supersede(S_stale)"], "crash": false, "mismatch": false}
+    "full_versions": {"snapshots": "SN_OLD_THEN_ACTIVE", "events": ["PublishSnapshot(2)", "UpdatePolicy(2)", "Correct(K1)"], "crash": false, "mismatch": false},
+    "versions_crash": {"snapshots": "SN_OLD_THEN_ACTIVE", "events": ["PublishSnapshot(2)", "Correct(K1)"], "crash": true, "mismatch": false},
+    "authority_dup": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Correct(K1_dup)", "Supersede(S_good)", "Supersede(S_auditor)"], "crash": false, "mismatch": false},
+    "authority_scope": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Correct(K2)", "Correct(K3)", "Supersede(S_good)"], "crash": false, "mismatch": false}
   },
   "safe_model_expectations": {
     "invariants_hold_in_every_explored_configuration": ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "U1"],
