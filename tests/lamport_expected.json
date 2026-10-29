@@ -12,6 +12,8 @@
       "SN_OLD": {"1": {"obs": [["e1", "AGE_B"]], "complete": true}},
       "SN_BLANK": {"1": {"obs": [["e1", "BLANK"]], "complete": true}},
       "SN_FUTURE": {"1": {"obs": [["e1", "FUTURE"]], "complete": true}},
+      "SN_CONFLICT_DUP_AB": {"1": {"obs": [["e1", "AGE_B"], ["e1", "AGE_A"]], "complete": true}},
+      "SN_CONFLICT_DUP_BA": {"1": {"obs": [["e1", "AGE_A"], ["e1", "AGE_B"]], "complete": true}},
       "SN_FUTURE_DUP": {"1": {"obs": [["e1", "FUTURE"], ["e1", "FUTURE"]], "complete": true}},
       "SN_FUTURE_AND_ACTIVE": {"1": {"obs": [["e1", "FUTURE"], ["e2", "AGE_A"]], "complete": true}},
       "SN_PARTIAL": {"1": {"obs": [["e1", "AGE_B"]], "complete": false}},
@@ -283,6 +285,49 @@
       "expect": {
         "records": [[1, 1, "UNKNOWN", false]],
         "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "_review_note": "The schedules below were added after the adversarial review at grok-terminal#13 (N4, N5, N6) and their expectations are written here before the first run. They are the AIce#9 model's reading of those schedules; the review's own statements about the source code are PROPOSED until replayed on that code.",
+    "REVIEW_N4_conflicting_duplicate_rows_order_ab": {
+      "issue_text": "the same event appears twice with conflicting buckets; the class must not depend on row order (older row first)",
+      "snapshots": "SN_CONFLICT_DUP_AB",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "ACTIVE", false]],
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "REVIEW_N4_conflicting_duplicate_rows_order_ba": {
+      "issue_text": "the same rows in the other order give the same class",
+      "snapshots": "SN_CONFLICT_DUP_BA",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "ACTIVE", false]],
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "REVIEW_N5_stale_worker_commits_after_newer_result": {
+      "issue_text": "W1 computed on snapshot 1; snapshot 2 is published; W2 commits on snapshot 2; W1 then tries to commit. The older result is not addressable as current.",
+      "snapshots": "SN_OLD_THEN_ACTIVE",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "PublishSnapshot(2)", "ReadSnap(W2)", "ReadPolicy(W2)", "Compute(W2)", "CommitWrite(W2)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[2, 1, "ACTIVE", false]],
+        "commit_version": 1,
+        "decision": ["DENIED", "not_inactive"],
+        "phases": {"W1": "STALE"}
+      }
+    },
+    "REVIEW_N6_release_arrives_before_hold": {
+      "issue_text": "a supersession names a correction that has not arrived. It is refused, not remembered, so the hold that arrives next stays in force. The other order is CTRL_A.",
+      "snapshots": "SN_OLD",
+      "steps": ["Supersede(S_good)", "Correct(K1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "checkpoints": {
+        "1": {"registry": {}, "last_registry_outcome": "refused", "accepted_supersessions": 0}
+      },
+      "expect": {
+        "registry": {"K1": "ACTIVE"},
+        "accepted_supersessions": 0,
+        "decision": ["DENIED", "hold"]
       }
     }
   },
