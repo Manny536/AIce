@@ -182,3 +182,20 @@ def test_adapter_does_not_import_a_change_into_the_scorer():
     a = ad.replay_in_scorer(EXP, [])
     b = ad.replay_in_scorer(EXP, [])
     assert a.ledger is not b.ledger and a.registry is not b.registry
+
+
+def test_review_n6_supersession_before_its_hold_in_both_orders():
+    """grok-terminal#13 N6, replayed. The model refuses the premature supersession; the
+    scorer accepts it and records it, yet the hold that arrives next is held, also at the child."""
+    early = ["Supersede(S_good)", "Correct(K1)"]
+    spec, st, run = _run(early)
+    assert [(e.name, e.outcome) for e in st.correction_registry.log] == [("S_good", "refused"), ("K1", "accepted")]
+    assert [o for _n, o in run.outcomes] == ["accepted", "accepted"]
+    assert ad.scorer_holds(run) == {"K1"} == ad.scorer_holds(run, ad.SEAT_CHILD)
+    assert ad.scorer_blocks_removal(run)
+    guarded = ad.replay_in_scorer(EXP, st.correction_registry.log, guard=True)
+    assert [o for _n, o in guarded.outcomes] == ["refused", "accepted"]
+    late = ["Correct(K1)", "Supersede(S_good)"]
+    _spec2, _st2, run2 = _run(late)
+    assert ad.scorer_holds(run2) == frozenset() == ad.scorer_holds(run2, ad.SEAT_CHILD)
+    assert not ad.scorer_blocks_removal(run2)

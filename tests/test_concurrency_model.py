@@ -22,7 +22,7 @@ import pytest
 from sticky_scorer import concurrency_model as cm
 
 EXP = cm.load_expected()
-SCHEDULES = {k: v for k, v in EXP["schedules"].items()}
+SCHEDULES = {k: v for k, v in EXP["schedules"].items() if not k.startswith("_")}
 CONFIGS = [k for k in EXP["explore_configs"] if not k.startswith("_")]
 VARIANTS = [k for k in EXP["unsafe_variants"] if not k.startswith("_")]
 ROOT = Path(__file__).resolve().parents[1]
@@ -204,3 +204,132 @@ def test_fixture_identifiers_are_synthetic():
     ids = EXP["fixtures"]["identifiers"]
     assert all(re.fullmatch(r"SYN-[A-Z]+-[0-9A-Z]+", v) for v in ids.values())
     assert not _URL.findall(str(EXP["fixtures"]))
+
+
+# ---------------------------------------------------------------------------
+# Each invariant must also be able to fail on its own, not only through a
+# broken variant. These tests edit one field of a reachable state and expect
+# exactly the named invariant to report it.
+# ---------------------------------------------------------------------------
+
+_COMMIT = ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"]
+
+
+def _base(events, steps, snapshots="SN_OLD"):
+    spec = cm.make_spec(EXP, snapshots, events)
+    st = cm.replay(spec, steps)[-1]
+    assert cm.violated(spec, st) == []
+    return spec, st
+
+
+def _only(spec, st, name):
+    """The edited state violates ``name`` (other invariants may report it as well)."""
+    assert name in cm.violated(spec, st), cm.violated(spec, st)
+
+
+def test_I4_fails_on_each_way_custody_or_authority_can_break():
+    spec, st = _base(["Correct(K1)", "Supersede(S_good)"], _COMMIT + ["Correct(K1)", "Supersede(S_good)"])
+    reg = st.correction_registry
+    e0, e1 = reg.log
+    # a correction listed twice
+    _only(spec, st._replace(correction_registry=reg._replace(entries=reg.entries * 2)), "I4")
+    # an attach in the log with no correction in the registry
+    _only(spec, st._replace(correction_registry=reg._replace(entries=())), "I4")
+    # an accepted event whose credential the external table does not issue to that principal
+    bad = e0._replace(principal="worker")
+    _only(spec, st._replace(correction_registry=reg._replace(log=(bad, e1))), "I4")
+    # the same credential used for two accepted events
+    _only(spec, st._replace(correction_registry=reg._replace(log=(e0, e1._replace(credential=e0.credential)))), "I4")
+    # a correction marked superseded with no accepted supersession in the log
+    _only(spec, st._replace(correction_registry=reg._replace(log=(e0,))), "I4")
+
+
+def test_I4_fails_when_a_release_stands_over_a_live_hold():
+    spec, st = _base(["Correct(K1)"], _COMMIT)
+    st2 = cm.replay(spec, _COMMIT + ["Correct(K1)"])[-1]
+    live = st2.correction_registry
+    released = st._replace(correction_registry=live)
+    assert released.decision_state.kind == cm.RELEASED
+    _only(spec, released, "I4")
+
+
+def test_I5_fails_on_stale_overwrite_and_stale_references():
+    spec, st = _base(["PublishSnapshot(2)"], _COMMIT, "SN_OLD_THEN_ACTIVE")
+    rec = st.records[0]
+    # records not strictly newer one after another
+    older = rec._replace(snap=2, commit_version=1)
+    newer = rec._replace(snap=1, commit_version=2)
+    assert "I5" in cm.violated(spec, st._replace(records=(older, newer), commit_version=2))
+    # decision refers to something other than the newest record
+    d = st.decision_state
+    _only(spec, st._replace(decision_state=d._replace(key=(2, 1))), "I5")
+    # evidence refers to something other than the newest record
+    ev = st.evidence_ref
+    _only(spec, st._replace(evidence_ref=ev._replace(snap=2)), "I5")
+    # a release is current only for the present versions
+    _only(spec, st._replace(snapshot_version=2), "I5")
+
+
+def test_I6_needs_every_gate_for_a_verified_report():
+    spec, st = _base([], _COMMIT + ["Report"])
+    assert st.report.kind == cm.VERIFIED
+    _only(spec, st._replace(decision_state=st.decision_state._replace(kind=cm.DENIED, reason="hold")), "I6")
+    bad_ev = st._replace(evidence_ref=st.evidence_ref._replace(scope="MISMATCH"))
+    assert "I6" in cm.violated(spec, bad_ev) and "I3" in cm.violated(spec, bad_ev)
+
+
+def test_I7_fails_on_non_synthetic_identifiers_and_address_or_link_text():
+    spec, st = _base([], _COMMIT)
+    rec = st.records[0]
+    _only(spec, st._replace(records=(rec._replace(seat="real-person"),)), "I7")
+    _only(spec, st._replace(records=(rec._replace(product="Product A"),)), "I7")
+    _only(spec, st._replace(records=(rec._replace(lineage=(("W1@host", 0),)),)), "I7")
+    _only(spec, st._replace(records=(rec._replace(lineage=(("W1://x", 0),)),)), "I7")
+    assert cm.inv_I7(spec, st)
+
+
+def test_U1_fails_when_a_denial_has_no_justification():
+    spec, st = _base([], _COMMIT + ["Report"])
+    d = st.decision_state
+    # not_inactive on a seat that is INACTIVE
+    assert "U1" in cm.violated(spec, st._replace(decision_state=d._replace(kind=cm.DENIED, reason="not_inactive")))
+    # evidence denial although the evidence is sufficient and matches
+    assert "U1" in cm.violated(spec, st._replace(decision_state=d._replace(kind=cm.DENIED, reason="evidence")))
+    # hold denial with no live hold
+    assert "U1" in cm.violated(spec, st._replace(decision_state=d._replace(kind=cm.DENIED, reason="hold")))
+    # a hold only on another seat does not justify a hold denial
+    spec2, st2 = _base(["Correct(K2)"], _COMMIT + ["Correct(K2)"])
+    assert "U1" in cm.violated(spec2, st2._replace(decision_state=st2.decision_state._replace(
+        kind=cm.DENIED, reason="hold")))
+
+
+def test_blocked_with_reason_needs_a_reason():
+    spec, st = _base([], _COMMIT)
+    d = st.decision_state
+    assert not cm.blocked_with_reason(st._replace(decision_state=d._replace(kind=cm.BLOCKED, reason="")))
+    assert cm.blocked_with_reason(st._replace(decision_state=d._replace(kind=cm.BLOCKED, reason="x")))
+    assert not cm.blocked_with_reason(st._replace(decision_state=d._replace(kind=cm.RELEASED, reason="x")))
+
+
+# Sizes were measured on the first complete run of these configurations. They are a
+# regression pin (a change in the transition relation moves them), not an
+# independently specified expectation.
+PINNED_SIZES = {
+    "race": (56, 104, 10), "blank": (56, 104, 10), "future": (56, 104, 10),
+    "future_only": (56, 104, 10), "bump": (1450, 2935, 22), "authority": (83500, 220328, 16),
+    "recall": (284, 536, 11), "hold": (284, 536, 11), "evidence": (137, 268, 10),
+    "partial": (56, 104, 10), "report": (56, 104, 10), "leak": (152, 336, 11),
+    "full_crash_hold": (5448, 13664, 18), "full_versions": (205221, 514102, 35),
+    "versions_crash": (61295, 150342, 28), "authority_dup": (21640, 59712, 15),
+    "authority_scope": (18908, 49636, 15),
+}
+
+
+def test_pinned_sizes_cover_every_configuration():
+    assert set(PINNED_SIZES) == set(CONFIGS)
+
+
+@pytest.mark.parametrize("name", CONFIGS)
+def test_explored_size_is_pinned(name):
+    res = cm.explore(cm.config_spec(EXP, name), progress=False)
+    assert (res.states, res.transitions, res.max_depth) == PINNED_SIZES[name]
