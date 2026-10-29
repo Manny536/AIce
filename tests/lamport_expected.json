@@ -330,6 +330,7 @@
   "mapping_expectations": {
     "_note": "What the current sticky_scorer represents, written from reading the module before the adapter exists.",
     "custody_membership_matches_model_for_every_registry_log": true,
+    "_refuted_by_running_the_adapter": "The line above was written before the adapter ran and is false for logs in which a correction is attached, superseded by an authorized event, and its attach credential is delivered again: the scorer accepts the second attach and holds the correction again; the model refuses it. Pinned in tests/test_concurrency_adapter.py (test_a_replayed_attach_token_resurrects_a_superseded_correction_in_the_scorer). The line is kept as written.",
     "flag_only_supersession_refused_with_verifier": true,
     "flag_only_supersession_accepted_without_verifier": true,
     "replayed_supersession_token_accepted_by_scorer": true,
