@@ -28,3 +28,9 @@ Byte-identical to upstream: docs/OA_PROBE_PREREG.json (stored here as docs/OA_PR
 Changed on vendoring: import paths, test-dir paths, wording for this repo's claim-language lint; causal.py and oa_probe.py otherwise unmodified.
 
 ANALOGY ONLY: the paper (arXiv:2501.02305) is about hash tables, not agents. Nothing here certifies an agent or closes L²_C.
+
+## Pylint follow-up
+
+Each of causal.py and oa_probe.py has one inline pylint pragma added, with a reason (a deliberate (b, a) argument order, and a loop that returns or raises). No logic changed. Current sha256:
+- `src/oa_probe/causal.py` `be00b1b9898d44f09fe41e015644efaee10779b3737969ac55f397fe3ffdb100`
+- `src/oa_probe/oa_probe.py` `fa0f50ce2fbe6bdf5ab621a79368beaa1be7d58e11e55544be8f62f59543cd84`
