@@ -323,8 +323,9 @@ class ForgeGTSupersedeLedger(CustodyLedger):
     leaked: object = None
 
     def _decide_supersession(self, ev):
+        # leaked is annotated as object but is a Registry at runtime (no-member is a false positive)
         if ev.authority == "safety_officer":
-            self.leaked._issued.append((ev.authority, SUPERSEDE, ev.patch_id, ev.node_id))
+            self.leaked._issued.append((ev.authority, SUPERSEDE, ev.patch_id, ev.node_id))  # pylint: disable=no-member
             return True, "verified"
         return super()._decide_supersession(ev)
 
