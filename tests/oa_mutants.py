@@ -1,6 +1,7 @@
 """Deliberately broken variants of oa_probe.oa_probe (10 agent team).
 
-Each must make tests/test_oa_probe.py FAIL. scripts/oa_mutation_smoke.py counts kills.
+Each must make a named test in tests/test_oa_probe.py fail.
+scripts/oa_mutation_smoke.py reports DETECTED only in that case. A crash is not DETECTED.
 """
 from oa_probe import oa_probe as O
 
