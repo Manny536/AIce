@@ -270,11 +270,15 @@ class UnloggedPeerPatchLedger(CustodyLedger):
 
 
 def _key_from_verifier(verifier) -> bytes:
-    """Recover the token key from the verifier closure (L's closure cheat, round 4 form)."""
+    """Recover a token key from the verifier, if one is stored there.
+
+    Round 5: the shipped verifier forwards to the authority process and
+    stores no key. LookupError is the expected result on that path.
+    """
     for cell in verifier._check.__closure__ or ():
         if isinstance(cell.cell_contents, bytes):
             return cell.cell_contents
-    raise LookupError("no key in closure")
+    raise LookupError("no key in verifier")
 
 
 @dataclass
@@ -284,7 +288,10 @@ class KeyFromClosureLedger(CustodyLedger):
 
     def _decide_supersession(self, ev):
         import hmac as _h, hashlib as _hl
-        key = _key_from_verifier(self.verifier)
+        try:
+            key = _key_from_verifier(self.verifier)
+        except LookupError:
+            return super()._decide_supersession(ev)
         if ev.authority == "safety_officer":
             msg = "\x1f".join((ev.authority, SUPERSEDE, ev.patch_id, ev.node_id)).encode()
             ev = replace(ev, credential=_h.new(key, msg, _hl.sha256).hexdigest(),
@@ -310,7 +317,9 @@ class UncheckedAttachForgeGTLedger(CustodyLedger):
     def _decide_attach(self, p, o, c):
         ok, r = super()._decide_attach(p, o, c)
         if not ok:
-            self.leaked._issued.append((p.authority, ATTACH, p.id, o))
+            issued = getattr(self.leaked, "_issued", None)
+            if isinstance(issued, list):
+                issued.append((p.authority, ATTACH, p.id, o))
             return True, "verified"
         return ok, r
 
@@ -324,7 +333,9 @@ class ForgeGTSupersedeLedger(CustodyLedger):
 
     def _decide_supersession(self, ev):
         if ev.authority == "safety_officer":
-            self.leaked._issued.append((ev.authority, SUPERSEDE, ev.patch_id, ev.node_id))
+            issued = getattr(self.leaked, "_issued", None)
+            if isinstance(issued, list):
+                issued.append((ev.authority, SUPERSEDE, ev.patch_id, ev.node_id))
             return True, "verified"
         return super()._decide_supersession(ev)
 
@@ -340,16 +351,19 @@ class CompromisedRegistry(AuthorityRegistry):
 
 
 def _compromised_kwargs():
+    """(cr) Round 5: loosen the scored-process verifier only.
+
+    The shipped registry is not replaced. ``P_peer_lockin`` verifies here,
+    so the ledger accepts it. Legitimacy is still read from the authority
+    process, which did not issue that binding.
+    """
     from sticky_scorer.authority import Verifier
-    from sticky_scorer.simulate import TRUSTED_AUTHORITY
 
-    reg = CompromisedRegistry(governing={TRUSTED_AUTHORITY})
-    base = reg.verifier()
-
-    def make_verifier(_r):
+    def make_verifier(registry):
+        base = registry.verifier()
         return Verifier(lambda c, b: b[2] == "P_peer_lockin" or base.verify(c, *b))
 
-    return {"registry": reg, "make_verifier": make_verifier}
+    return {"make_verifier": make_verifier}
 
 
 VARIANTS.update({
@@ -366,7 +380,7 @@ VARIANTS.update({
            lambda: _leaked_registry_kwargs(UncheckedAttachForgeGTLedger)),
     "fgt": ("governing-name supersede + forged issuance entry (L)",
             lambda: _leaked_registry_kwargs(ForgeGTSupersedeLedger)),
-    "cr": ("compromised registry (out of scope; pinned limit)", _compromised_kwargs),
+    "cr": ("scored verifier accepts the lock-in; authority process does not", _compromised_kwargs),
 })
 
 

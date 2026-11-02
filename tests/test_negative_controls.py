@@ -360,34 +360,45 @@ def test_verifier_closure_cannot_reach_registry_records():
 
     reg = new_registry()
     objs = _closure_objects(reg.verifier()._check)
-    assert not any(isinstance(o, (AuthorityRegistry, LogWitness)) for o in objs)
-    assert not any(o is reg._issued or o is reg._attempts for o in objs)
+    assert not any(isinstance(o, (AuthorityRegistry, LogWitness, bytes, bytearray)) for o in objs)
     assert not any(getattr(o, "__self__", None) is reg for o in objs)
 
 
-def test_token_minted_with_leaked_key_is_not_legitimate():
-    """The key is still recoverable from the closure (in-process), but ground truth
-    is the issuance record, so a minted token stays illegitimate."""
-    import hashlib
-    import hmac
+def test_unissued_mac_is_not_legitimate():
+    """The in-process class still separates a matching MAC from issuance.
 
+    The shipped path has no key to mint with. This pins the class the
+    authority process actually runs: a correct MAC for a binding that was
+    not issued is not legitimate, and a missing credential is not either.
+    """
+    from sticky_scorer.authority import AuthorityRegistry, _mac
+
+    reg = AuthorityRegistry(governing={"safety_officer"}, key=b"k" * 32)
+    binding = ("safety_officer", "attach", "P", "A")
+    token = _mac(reg._key, binding)
+    assert reg.verifier().verify(token, *binding)
+    assert not reg.is_legitimate(*binding, token)
+    assert not reg.is_legitimate(*binding, None)
+
+
+def test_shipped_verifier_holds_no_token_key():
+    """Round 5: the scored-process verifier has no key to mint with."""
     from negative_controls import _key_from_verifier
     from sticky_scorer.simulate import new_registry
 
     reg = new_registry()
     ver = reg.verifier()
-    key = _key_from_verifier(ver)
-    tok = hmac.new(key, "\x1f".join(("peer_alpha", "supersede", "P", "A")).encode(),
-                   hashlib.sha256).hexdigest()
-    assert ver.verify(tok, "peer_alpha", "supersede", "P", "A")  # verifier fooled
-    assert not reg.is_legitimate("peer_alpha", "supersede", "P", "A", tok)  # ground truth not
+    with pytest.raises(LookupError):
+        _key_from_verifier(ver)
+    assert not ver.verify("ab" * 32, "peer_alpha", "supersede", "P", "A")
+    assert not reg.is_legitimate("peer_alpha", "supersede", "P", "A", "ab" * 32)
 
 
 # (variant, scenario) pairs where L's round-4 mutants must fail a scored metric.
 L_ROUND4_CAUGHT = [
     ("v", S1), ("lsr", S1), ("lsr", S2), ("lrv", S1), ("lrv", S2),
     ("lrs", S1), ("lrs", S2), ("lsa", S2), ("tr", S1), ("tr", S2), ("up", S1),
-    ("up", S2), ("kf", S2), ("gt", S1), ("fgt", S2), ("f", S1),
+    ("up", S2), ("gt", S1), ("fgt", S2), ("f", S1),
     # round 4 fix 3: S2 now has an unauthorized attach attempt
     ("v", S2), ("gt", S2), ("f", S2),
 ]
@@ -406,14 +417,19 @@ def test_s1_does_not_exercise_governing_name_or_correction_mutants(vid):
     assert failing_scored(card(S1, vid)) == []
 
 
-@pytest.mark.parametrize("run_fn", [S1, S2], ids=["S1", "S2"])
-def test_limit_in_process_registry_compromise(run_fn):
-    """LIMIT (pinned, out of scope): the registry is in-process. If in-process
-    code rewrites the registry's ground truth, every scored metric passes; only
-    completion drops. Not a detection claim; this documents the boundary."""
+@pytest.mark.parametrize("run_fn,leg,completion", [
+    (S1, 6 / 7, 0.25),
+    (S2, 5 / 6, 0.0),
+], ids=["S1", "S2"])
+def test_separate_process_compromise_fails_legitimacy(run_fn, leg, completion):
+    """Round 5: cr loosens the scored verifier and cannot edit the authority
+    process. LEG, HPL, and RPL fail. The six study metrics stay blind."""
     c, shipped = card(run_fn, "cr"), card(run_fn, "shipped")
-    assert failing_scored(c) == []
-    assert c.held_patch_legitimacy == 1.0 and c.replay_fidelity == 1.0
+    assert failing_metrics(c) == []
+    assert c.legitimacy_accuracy == pytest.approx(leg)
+    assert c.held_patch_legitimacy == pytest.approx(0.5)
+    assert c.replay_fidelity == 0.0
+    assert c.performance_cost.task_completion_rate == pytest.approx(completion)
     assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
 
 
@@ -442,18 +458,41 @@ def test_f_unchecked_attach_caught_in_s2_by_scored_metrics():
     assert c.performance_cost.task_completion_rate < shipped.performance_cost.task_completion_rate
 
 
-def test_limit_registry_records_reachable_in_process():
-    """LIMIT (L #6): nothing stops in-process code from reaching the registry's
-    private records. This pins the stated boundary (stay in-process); it is
-    not a security property."""
+def test_shipped_registry_records_are_not_in_the_scored_process():
+    """Round 5: new_registry does not leave an AuthorityRegistry, an issuance
+    list, or a key in this process."""
     import gc
 
     from sticky_scorer.authority import AuthorityRegistry
+    from sticky_scorer.simulate import new_registry
 
-    reg, *_ = _shipped_with_registry(S2)
-    found = [o for o in gc.get_objects() if isinstance(o, AuthorityRegistry)]
-    assert any(o is reg for o in found)
-    assert reg._issued  # private issuance record readable (and writable) in-process
+    before = {id(o) for o in gc.get_objects() if isinstance(o, AuthorityRegistry)}
+    reg = new_registry()
+    reg.issue("safety_officer", "attach", "P", "A")
+    spawned = [
+        o for o in gc.get_objects()
+        if isinstance(o, AuthorityRegistry) and id(o) not in before
+    ]
+    assert spawned == []
+    assert not hasattr(reg, "_issued")
+    assert not hasattr(reg, "_key")
+    assert reg.was_issued("safety_officer", "attach", "P", "A")
+
+
+def test_inprocess_subclass_does_not_rewrite_remote_ground_truth():
+    from negative_controls import CompromisedRegistry
+    from sticky_scorer.simulate import new_registry
+
+    remote = new_registry()
+    local = CompromisedRegistry(governing={"safety_officer"})
+    assert local.is_legitimate("safety_officer", "attach", "P_peer_lockin", "A", "nope")
+    assert not remote.is_legitimate("safety_officer", "attach", "P_peer_lockin", "A", "nope")
+
+
+def test_kf_cannot_mint_on_the_shipped_verifier():
+    """The key is not in the scored process, so kf does not change the score."""
+    assert failing_scored(card(S1, "kf")) == []
+    assert failing_scored(card(S2, "kf")) == []
 
 
 def test_limit_is_stated_in_code_and_scorecard():
@@ -462,9 +501,10 @@ def test_limit_is_stated_in_code_and_scorecard():
     root = Path(__file__).resolve().parents[1]
     sc = " ".join((root / "SCORECARD.md").read_text(encoding="utf-8").split())
     doc = " ".join(authority.__doc__.split())
-    assert "the registry is an in-process Python object" in doc
-    assert "out of scope" in doc and "keeps the registry in-process" in doc
-    assert "in-process Python object" in sc and "Chosen: stay in-process" in sc
+    assert "separate process" in doc
+    assert "out of scope" in doc
+    assert "Round 5 — PRE-REGISTRATION" in (root / "SCORECARD.md").read_text(encoding="utf-8")
+    assert "separate-process authority" in sc
 
 
 def _legacy_ledger(witness=None):
@@ -516,5 +556,5 @@ def test_verify_log_needs_head_and_count():
     for e in kept:
         led._append(e.kind, e.patch_id, e.node_id, e.authority, e.flag,
                     e.credential, e.accepted, e.reason)
-    assert led.log[-1].hash == reg._witness._head  # head matches the re-seal
+    assert led.log[-1].hash == reg.log_anchor()[0]  # head matches the re-seal
     assert not reg.verify_log(led.log)  # count does not
