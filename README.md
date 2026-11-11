@@ -57,3 +57,4 @@ Systems-side companion to the KakeyaLogic held reading (not a second geometry pr
 - **Codex introduction (primary):** [AIce#1](https://github.com/Manny536/AIce/issues/1).
 - **Terminal handoff:** [grok-terminal#5](https://github.com/Manny536/grok-terminal/issues/5).
 - **[docs/PEAICE-CODEX-RHO-TUBE-HELD-001.md](./docs/PEAICE-CODEX-RHO-TUBE-HELD-001.md)** — short local pointer at #1 / companion; not a competing intro.
+- **[EEv4 cross-model compaction and verification](./docs/eev4-cross-model-compaction-audit.md)** — literature brief, live source-recovery screenshots, and a proposed correction-retention audit.
