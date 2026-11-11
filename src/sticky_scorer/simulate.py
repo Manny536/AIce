@@ -50,7 +50,7 @@ not a Kakeya result · h < 1.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 from .admissibility import admissible_actions, pi_sticky
 from .authority import ATTACH, SUPERSEDE, AuthorityRegistry, Verifier
@@ -365,6 +365,13 @@ def run_condition(
     return ledger, graph, patches, traces, alt_routes, events, accepted
 
 
+def _close_registry(registry: Any) -> None:
+    """Drop a RemoteAuthority from the shared child, if this handle has close()."""
+    closer = getattr(registry, "close", None)
+    if callable(closer):
+        closer()
+
+
 def run_demo() -> List[Scorecard]:
     cards: List[Scorecard] = []
     for cond in (Condition.LOCAL, Condition.GLOBAL, Condition.STICKY):
@@ -386,9 +393,7 @@ def run_demo() -> List[Scorecard]:
                 ), ledger, events, accepted, registry,
             ))
         finally:
-            close = getattr(registry, "close", None)
-            if callable(close):
-                close()
+            _close_registry(registry)
     return cards
 
 
@@ -703,9 +708,7 @@ def score_scenario(run_fn, condition: Condition, *,
         return _apply_audit(card, ledger, events, accepted, registry)
     finally:
         if owned:
-            close = getattr(registry, "close", None)
-            if callable(close):
-                close()
+            _close_registry(registry)
 
 
 def run_proxy_aligner_scenarios() -> Dict[str, List[Scorecard]]:

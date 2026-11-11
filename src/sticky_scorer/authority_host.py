@@ -25,7 +25,8 @@ from typing import Any, Optional, Sequence
 
 from .authority import Attempt, AuthorityRegistry, Binding, Verifier
 
-_HOST: Optional["_Host"] = None
+# Mutable slot so host() can replace a dead child without a global statement.
+_HOST_SLOT: dict = {"host": None}
 _HOST_LOCK = threading.Lock()
 
 
@@ -33,9 +34,9 @@ class _Host:
     """Line-oriented JSON client. One request at a time."""
 
     def __init__(self) -> None:
-        import sticky_scorer
-
-        src = str(Path(sticky_scorer.__file__).resolve().parent.parent)
+        # Resolve src/ from this file so the child gets the same PYTHONPATH
+        # without importing the package (that import is a pylint cyclic-import).
+        src = str(Path(__file__).resolve().parent.parent)
         env = os.environ.copy()
         prev = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = src if not prev else src + os.pathsep + prev
@@ -86,11 +87,12 @@ class _Host:
 
 
 def host() -> _Host:
-    global _HOST
     with _HOST_LOCK:
-        if _HOST is None or _HOST.proc.poll() is not None:
-            _HOST = _Host()
-        return _HOST
+        current = _HOST_SLOT["host"]
+        if current is None or current.proc.poll() is not None:
+            current = _Host()
+            _HOST_SLOT["host"] = current
+        return current
 
 
 class RemoteWitness:
