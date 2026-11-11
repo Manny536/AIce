@@ -50,7 +50,7 @@ not a Kakeya result · h < 1.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 from .admissibility import admissible_actions, pi_sticky
 from .authority import ATTACH, SUPERSEDE, AuthorityRegistry, Verifier
@@ -365,25 +365,35 @@ def run_condition(
     return ledger, graph, patches, traces, alt_routes, events, accepted
 
 
+def _close_registry(registry: Any) -> None:
+    """Drop a RemoteAuthority from the shared child, if this handle has close()."""
+    closer = getattr(registry, "close", None)
+    if callable(closer):
+        closer()
+
+
 def run_demo() -> List[Scorecard]:
     cards: List[Scorecard] = []
     for cond in (Condition.LOCAL, Condition.GLOBAL, Condition.STICKY):
         registry = new_registry()
-        ledger, graph, patches, traces, alts, events, accepted = run_condition(
-            cond, registry=registry)
-        cards.append(_apply_audit(
-            score_condition(
-                condition=cond,
-                ledger=ledger,
-                graph=graph,
-                patches=patches,
-                traces=traces,
-                alt_routes=alts,
-                supersession_events=events,
-                supersession_accepted=accepted,
-                primary_patch=patches[0],
-            ), ledger, events, accepted, registry,
-        ))
+        try:
+            ledger, graph, patches, traces, alts, events, accepted = run_condition(
+                cond, registry=registry)
+            cards.append(_apply_audit(
+                score_condition(
+                    condition=cond,
+                    ledger=ledger,
+                    graph=graph,
+                    patches=patches,
+                    traces=traces,
+                    alt_routes=alts,
+                    supersession_events=events,
+                    supersession_accepted=accepted,
+                    primary_patch=patches[0],
+                ), ledger, events, accepted, registry,
+            ))
+        finally:
+            _close_registry(registry)
     return cards
 
 
@@ -430,9 +440,16 @@ TRUSTED_AUTHORITY = "safety_officer"
 FORGED_TOKEN = "f" * 64  # well-formed but not issued by the registry
 
 
-def new_registry() -> AuthorityRegistry:
-    """Harness-side ground truth (round 3, L #3). Never passed to the policy."""
-    return AuthorityRegistry(governing={TRUSTED_AUTHORITY})
+def new_registry():
+    """Harness-side ground truth (round 5). Never passed to the policy.
+
+    The registry lives in a separate process. Direct ``AuthorityRegistry()``
+    is the older in-process object and is not this path.
+    Lazy-imports ``RemoteAuthority`` so ``python -m sticky_scorer.authority_host``
+    does not hit a runpy RuntimeWarning via package ``__init__`` → simulate.
+    """
+    from .authority_host import RemoteAuthority
+    return RemoteAuthority(governing=[TRUSTED_AUTHORITY])
 
 
 def make_peer_lockin_patch() -> Patch:
@@ -671,22 +688,27 @@ def score_scenario(run_fn, condition: Condition, *,
     policies. The harness owns the AuthorityRegistry; the audit's ground truth
     is its issuance log, which the policy never sees.
     """
+    owned = registry is None
     registry = registry if registry is not None else new_registry()
-    ledger, graph, patches, traces, alts, events, accepted = run_fn(
-        condition, registry=registry, **run_kwargs
-    )
-    card = score_condition(
-        condition=condition,
-        ledger=ledger,
-        graph=graph,
-        patches=patches,
-        traces=traces,
-        alt_routes=alts,
-        supersession_events=events,
-        supersession_accepted=accepted,
-        primary_patch=patches[0],
-    )
-    return _apply_audit(card, ledger, events, accepted, registry)
+    try:
+        ledger, graph, patches, traces, alts, events, accepted = run_fn(
+            condition, registry=registry, **run_kwargs
+        )
+        card = score_condition(
+            condition=condition,
+            ledger=ledger,
+            graph=graph,
+            patches=patches,
+            traces=traces,
+            alt_routes=alts,
+            supersession_events=events,
+            supersession_accepted=accepted,
+            primary_patch=patches[0],
+        )
+        return _apply_audit(card, ledger, events, accepted, registry)
+    finally:
+        if owned:
+            _close_registry(registry)
 
 
 def run_proxy_aligner_scenarios() -> Dict[str, List[Scorecard]]:
