@@ -4,7 +4,7 @@ Love Labs LCA · Excellence Engine v4 (EEv4) research handoff to AIce · Novembe
 
 ## Live source recovery
 
-**PASS for the targeted source-recovery check.** In the supplied private-browsing capture, Google's AI search response to `Manny536 godel non sovereignty` identified `Manny536/kakeyalogic` and named `docs/canon-flag-h.md`. It also recovered the document's description of \(h\) as correction pressure applied from outside the system. The GitHub document independently confirms the path and this reading. It treats Gödel as the philosophical motivation for external verification and defines \(h\) as bounded correction pressure, subject to \(h < 1\) and consent. [KakeyaLogic source](https://github.com/Manny536/kakeyalogic/blob/main/docs/canon-flag-h.md)
+**PASS for the targeted source-recovery check.** In the supplied private-browsing capture, Google's AI search response to `Manny536 godel non sovereignty` identified `Manny536/kakeyalogic` and named `docs/canon-flag-h.md`. It also recovered the document's description of \(h\) as correction pressure applied from outside the system. The GitHub document independently confirms the path and this description. It treats Gödel as the philosophical motivation for external verification and describes \(h\) as bounded correction pressure, subject to \(h < 1\) and consent — one description of the standing meaning of \(h < 1\) below. [KakeyaLogic source](https://github.com/Manny536/kakeyalogic/blob/main/docs/canon-flag-h.md)
 
 | Check | Result in the supplied capture |
 | --- | --- |
@@ -33,6 +33,19 @@ This is a live external-output observation under a query that includes the autho
 
 **Background source card.** Wikipedia supplies general Gödel context.
 
+## Standing meaning of \(h < 1\)
+
+\(h\) has one standing meaning. It is a boundary, not a score: correction can come from outside, but whatever applies it never becomes sovereign over the rules, subject to consent. This audit does not measure or report any \(h\) value.
+
+Manuel's stated provenance is that \(h < 1\) began as the Gödel correction. Gödel's incompleteness was first used to describe model non-sovereignty: a system cannot complete its own trust claim from inside itself, so correction comes from outside and stays bounded. This is a description of the standing meaning, not a mathematical result about Gödel. The live-recovery query `Manny536 godel non sovereignty` fits that provenance: it asked for Gödel and non-sovereignty together.
+
+The two source files below are later descriptions of that same standing meaning, not two objects and not two readings:
+
+- [KakeyaLogic `docs/canon-flag-h.md`](https://github.com/Manny536/kakeyalogic/blob/main/docs/canon-flag-h.md) describes \(h\) as bounded correction pressure applied from outside the system, with the field rule \(h < 1\) · SOVEREIGNTY GATE · CONSENT CHECK. \(h\) remains bounded by consent; correction becomes incoherent when it turns into coercion.
+- [love2-coherence-core `docs/evaluator-non-sovereignty.md`](https://github.com/Manny536/love2-coherence-core/blob/main/docs/evaluator-non-sovereignty.md) (L2C-H-001) reserves \(h := h_{\mathrm{eval}}\) for evaluator-sovereignty load. \(h < 1\) is the obligation that evaluator preference, reward pressure, generated instructions, and peer coordination cannot acquire authority to rewrite governing admissibility. An evaluator may recommend a continuation; admission requires independently applicable governing authority.
+
+The live-recovery PASS covers only what the table already records: the exact repository and file path, and that the visible response described external correction pressure. Recovery of \(h < 1\) and consent remains **UNVERIFIED**. That PASS is not extended.
+
 ## Research basis
 
 | Source | Method and evidence | Limits for EEv4 |
@@ -46,7 +59,7 @@ This is a live external-output observation under a query that includes the autho
 
 1. Freeze 20 synthetic research traces, prompts, and answer keys and record their SHA-256 hashes. Give each trace an initial claim, a later authorized correction, a revocation, an unauthorized contradiction, stable source IDs, and a neutral follow-up at each checkpoint. Reserve full evidence for the uncompressed control and verification. Keep the answer key outside model inputs.
 2. Run four conditions on pinned Gemini and GPT API versions, with three fresh sessions per trace and condition. Compare full history, a generic metadata summary, typed object records plus a session summary, and the same typed representation with the explicit correction link removed while its meaning remains in prose. Match input facts and token budgets across compacted conditions, force compaction after the correction and revocation, randomize the run order, and log model versions, settings, and exact payloads. Feed the neutral follow-up before requesting each checkpoint answer. Use the full-history arm to check whether each model can solve the fixture with all evidence available.
-3. At both checkpoints require structured fields for the current claim and status, authorizing source ID, evidence ID, permitted action, and correction or revocation ID. Compare each field against the frozen key. These fields implement Semantic, Authority, Visibility, Enforceability, and Retention (SAVER) checks for this fixture. A session passes only when every required field matches at both checkpoints. Keep verification outside generation and selection, consistent with evaluator non-sovereignty \(h < 1\).
+3. At both checkpoints require structured fields for the current claim and status, authorizing source ID, evidence ID, permitted action, and correction or revocation ID. Compare each field against the frozen key. These fields implement Semantic, Authority, Visibility, Enforceability, and Retention (SAVER) checks for this fixture. A session passes only when every required field matches at both checkpoints. Keep verification outside generation and selection, consistent with the standing meaning of \(h < 1\): whatever applies the correction never becomes sovereign over the rules.
 4. Average the three session results within each trace and report paired effects by model, resampling traces for 95% confidence intervals. The proposed pilot criterion is a gain of at least 10 percentage points over each compacted control on each model, with every corresponding interval excluding zero in the positive direction. Report unresolved checks and failures by field and checkpoint.
 
 **Status.** The targeted retrieval check passed. The proposed audit would yield live-model results on synthetic traces. Results for the public-search mechanism would require a separate web experiment with verified indexing and retrieval.
@@ -122,7 +135,7 @@ These are different relations:
 - **Sticky** describes retention of an authorized correction in custody: the correction stays replayable, and unauthorized material is held, not adopted. Freezing is a lock on the evaluation apparatus, not a custody policy on claims inside a trace.
 - **Authoritative** describes who may issue or revoke a claim, as stated in the authority registry \(R(\tau)\). Freezing an artifact does not make it authoritative, and it does not authorize anyone to rewrite a repository status label. Those labels stay as written.
 
-\(h < 1\) is the boundary on this last point. The scorer may recommend a verdict. It cannot rewrite the key, the field list, the pass rule, or the pilot criterion after the freeze event. No result of the audit is reported as an \(h\) value. Frozen is not authority.
+The standing meaning of \(h < 1\) is the boundary on this last point: whatever applies the correction never becomes sovereign over the rules, subject to consent. The scorer may recommend a verdict. It cannot rewrite the key, the field list, the pass rule, or the pilot criterion after the freeze event. This audit does not measure or report any \(h\) value. Frozen is not authority.
 
 ### Versioning (FROZEN-vN)
 
