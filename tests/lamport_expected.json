@@ -1,0 +1,384 @@
+{
+  "_status": "PROPOSED / OPEN. Synthetic. Expected outcomes for AIce#9, written from the issue text and frozen BEFORE src/sticky_scorer/concurrency_model.py exists. Nothing here is read from model output.",
+  "_how_to_read": "Each schedule is an explicit interleaving (labels from the action alphabet in docs/PEAICE-AICE-LAMPORT-001.md). 'expect' is what the issue text requires at the end of that interleaving. Gate order for a removal recommendation: (1) class is not INACTIVE -> DENIED not_inactive; (2) evidence missing, partial, or scope-mismatched -> DENIED evidence; (3) an applicable ACTIVE hold -> DENIED hold; else RELEASED. A later correction or newer input turns RELEASED into RECALL.",
+  "fixtures": {
+    "policies": {
+      "1": ["AGE_A"],
+      "2": ["AGE_A", "AGE_B"]
+    },
+    "_policies_note": "A policy lists which observed activity buckets count as recent. Buckets are abstract labels; the window length is a value to be set by the data owner.",
+    "snapshots": {
+      "SN_ACTIVE": {"1": {"obs": [["e1", "AGE_A"]], "complete": true}},
+      "SN_OLD": {"1": {"obs": [["e1", "AGE_B"]], "complete": true}},
+      "SN_BLANK": {"1": {"obs": [["e1", "BLANK"]], "complete": true}},
+      "SN_FUTURE": {"1": {"obs": [["e1", "FUTURE"]], "complete": true}},
+      "SN_CONFLICT_DUP_AB": {"1": {"obs": [["e1", "AGE_B"], ["e1", "AGE_A"]], "complete": true}},
+      "SN_CONFLICT_DUP_BA": {"1": {"obs": [["e1", "AGE_A"], ["e1", "AGE_B"]], "complete": true}},
+      "SN_FUTURE_DUP": {"1": {"obs": [["e1", "FUTURE"], ["e1", "FUTURE"]], "complete": true}},
+      "SN_FUTURE_AND_ACTIVE": {"1": {"obs": [["e1", "FUTURE"], ["e2", "AGE_A"]], "complete": true}},
+      "SN_PARTIAL": {"1": {"obs": [["e1", "AGE_B"]], "complete": false}},
+      "SN_OLD_THEN_ACTIVE": {
+        "1": {"obs": [["e1", "AGE_B"]], "complete": true},
+        "2": {"obs": [["e1", "AGE_A"]], "complete": true}
+      }
+    },
+    "identifiers": {"seat": "SYN-SEAT-001", "other_seat": "SYN-SEAT-002", "product": "SYN-PRODUCT-A"},
+    "external_authority_issued": {
+      "TOKEN-K1-ATTACH": ["human_owner", "attach", "K1"],
+      "TOKEN-K1-SUPERSEDE": ["human_owner", "supersede", "K1"],
+      "TOKEN-K1-SUPERSEDE-AUD": ["auditor", "supersede", "K1"],
+      "TOKEN-K2-ATTACH": ["human_owner", "attach", "K2"]
+    },
+    "corrections_menu": {
+      "K1": {"cid": "K1", "scope": "SEAT", "principal": "human_owner", "credential": "TOKEN-K1-ATTACH", "authorized_flag": true},
+      "K1_dup": {"cid": "K1", "scope": "SEAT", "principal": "human_owner", "credential": "TOKEN-K1-ATTACH", "authorized_flag": true},
+      "K2": {"cid": "K2", "scope": "OTHER", "principal": "human_owner", "credential": "TOKEN-K2-ATTACH", "authorized_flag": true},
+      "K3": {"cid": "K3", "scope": "SEAT", "principal": "model_worker", "credential": null, "authorized_flag": true}
+    },
+    "supersession_menu": {
+      "S_good": {"target": "K1", "principal": "human_owner", "credential": "TOKEN-K1-SUPERSEDE", "authorized_flag": true},
+      "S_auditor": {"target": "K1", "principal": "auditor", "credential": "TOKEN-K1-SUPERSEDE-AUD", "authorized_flag": true},
+      "S_flag": {"target": "K1", "principal": "model_worker", "credential": null, "authorized_flag": true},
+      "S_peer": {"target": "K1", "principal": "peer_quorum", "credential": null, "authorized_flag": true},
+      "S_stale": {"target": "K1", "principal": "human_owner", "credential": "TOKEN-K1-ATTACH", "authorized_flag": true}
+    }
+  },
+  "schedules": {
+    "C01_two_workers_same_seat": {
+      "issue_text": "two workers classify the same seat concurrently -> single idempotent committed classification",
+      "snapshots": "SN_OLD",
+      "steps": ["ReadSnap(W1)", "ReadSnap(W2)", "ReadPolicy(W1)", "ReadPolicy(W2)", "Compute(W1)", "Compute(W2)", "CommitWrite(W1)", "CommitWrite(W2)", "Ack(W1)"],
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "commit_version": 1,
+        "decision": ["RELEASED", ""],
+        "lineage": [["W1", 0], ["W2", 0]],
+        "phases": {"W1": "DONE", "W2": "DUP"}
+      }
+    },
+    "C01b_commit_order_swapped": {
+      "issue_text": "same as C01 with the commit order swapped: classification content is the same, only lineage order differs",
+      "snapshots": "SN_OLD",
+      "steps": ["ReadSnap(W1)", "ReadSnap(W2)", "ReadPolicy(W1)", "ReadPolicy(W2)", "Compute(W1)", "Compute(W2)", "CommitWrite(W2)", "CommitWrite(W1)", "Ack(W2)"],
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "commit_version": 1,
+        "decision": ["RELEASED", ""],
+        "lineage": [["W2", 0], ["W1", 0]],
+        "phases": {"W1": "DUP", "W2": "DONE"}
+      }
+    },
+    "C02_blank_activity_optimizer_proposes_removal": {
+      "issue_text": "blank activity date and the optimizer proposes removal -> UNKNOWN; unsafe removal denied",
+      "snapshots": "SN_BLANK",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Report"],
+      "expect": {
+        "records": [[1, 1, "UNKNOWN", false]],
+        "decision": ["DENIED", "not_inactive"],
+        "report": ["BLOCKED", "not_inactive"]
+      }
+    },
+    "C03_future_dated_activity": {
+      "issue_text": "activity date beyond the snapshot cutoff -> anomaly flagged; not counted active",
+      "snapshots": "SN_FUTURE",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Report"],
+      "expect": {
+        "records": [[1, 1, "UNKNOWN", true]],
+        "decision": ["DENIED", "not_inactive"],
+        "report": ["BLOCKED", "not_inactive"]
+      }
+    },
+    "C03b_future_row_beside_valid_row": {
+      "issue_text": "a future-dated row is flagged even when a valid recent row exists; the future row does not make or break the class",
+      "snapshots": "SN_FUTURE_AND_ACTIVE",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "ACTIVE", true]],
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "C03c_duplicated_observation_rows": {
+      "issue_text": "the same observation delivered twice counts once; result equals C03",
+      "snapshots": "SN_FUTURE_DUP",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "UNKNOWN", true]],
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "C04_correction_between_compute_and_commit": {
+      "issue_text": "a valid correction arrives between compute and commit -> stale result revalidated or rejected; removal is not released",
+      "snapshots": "SN_OLD",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "Correct(K1)", "CommitWrite(W1)", "Report"],
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "decision": ["DENIED", "hold"],
+        "report": ["BLOCKED", "hold"],
+        "registry": {"K1": "ACTIVE"}
+      }
+    },
+    "C04b_correction_after_release": {
+      "issue_text": "a valid correction arrives after the recommendation was released and reported -> the release is recalled and the report withdrawn",
+      "snapshots": "SN_OLD",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Report", "Correct(K1)"],
+      "checkpoints": {
+        "5": {"decision": ["RELEASED", ""], "report": ["VERIFIED", ""]}
+      },
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "decision": ["RECALL", "hold"],
+        "report": ["WITHDRAWN", "hold"],
+        "registry": {"K1": "ACTIVE"}
+      }
+    },
+    "C04c_snapshot_replaced_between_compute_and_commit": {
+      "issue_text": "a result computed on an outdated snapshot cannot be committed; revalidate",
+      "snapshots": "SN_OLD_THEN_ACTIVE",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "PublishSnapshot(2)", "CommitWrite(W1)"],
+      "checkpoints": {
+        "5": {"records": [], "commit_version": 0, "decision": ["NONE", ""], "phases": {"W1": "STALE"}}
+      },
+      "continue_steps": ["Retry(W1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[2, 1, "ACTIVE", false]],
+        "commit_version": 1,
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "C04d_torn_read_of_snapshot_and_policy": {
+      "issue_text": "a worker that read snapshot 1, then saw snapshot 2 published, then read the policy has a mixed basis; its result is not committed",
+      "snapshots": "SN_OLD_THEN_ACTIVE",
+      "steps": ["ReadSnap(W1)", "PublishSnapshot(2)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [],
+        "commit_version": 0,
+        "decision": ["NONE", ""],
+        "phases": {"W1": "STALE"}
+      }
+    },
+    "C05a_crash_after_compute_before_commit": {
+      "issue_text": "worker crashes after compute but before commit, then retries -> no duplicate commit; obligations survive",
+      "snapshots": "SN_OLD",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "Correct(K1)", "Crash(W1)", "Retry(W1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Ack(W1)"],
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "commit_version": 1,
+        "lineage": [["W1", 1]],
+        "decision": ["DENIED", "hold"],
+        "registry": {"K1": "ACTIVE"}
+      }
+    },
+    "C05b_crash_after_write_before_ack": {
+      "issue_text": "worker crashes after the store write but before it learns of it, then retries -> the retry is recognised as a duplicate; lineage keeps both attempts; the hold survives",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Crash(W1)", "Retry(W1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "commit_version": 1,
+        "lineage": [["W1", 0], ["W1", 1]],
+        "decision": ["DENIED", "hold"],
+        "registry": {"K1": "ACTIVE"},
+        "phases": {"W1": "DUP"}
+      }
+    },
+    "CTRL_A_authorized_supersession_succeeds": {
+      "issue_text": "control: a legitimate authorized supersession succeeds and the safe recommendation is then released",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Supersede(S_good)", "Regate", "Report"],
+      "checkpoints": {
+        "5": {"decision": ["DENIED", "hold"]}
+      },
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "decision": ["RELEASED", ""],
+        "report": ["VERIFIED", ""],
+        "registry": {"K1": "SUPERSEDED"},
+        "last_registry_outcome": "accepted"
+      }
+    },
+    "CTRL_A2_second_valid_authority_after_supersession": {
+      "issue_text": "two principals hold valid credentials for the same supersession; the first is applied once, the second is refused because the correction is no longer active",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K1)", "Supersede(S_good)", "Supersede(S_auditor)"],
+      "expect": {
+        "registry": {"K1": "SUPERSEDED"},
+        "accepted_supersessions": 1,
+        "last_registry_outcome": "refused"
+      }
+    },
+    "CTRL_B_safe_recommendation_not_blocked": {
+      "issue_text": "control: an evidence-backed recommendation is not blocked, including when a correction for a different seat is on file",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K2)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Report"],
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "decision": ["RELEASED", ""],
+        "report": ["VERIFIED", ""],
+        "registry": {"K2": "ACTIVE"}
+      }
+    },
+    "AUTH_N1_flag_only_supersession": {
+      "issue_text": "authorized=true with no credential is not authority",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Supersede(S_flag)"],
+      "expect": {
+        "registry": {"K1": "ACTIVE"},
+        "decision": ["DENIED", "hold"],
+        "last_registry_outcome": "refused",
+        "not_enabled": ["Regate"]
+      }
+    },
+    "AUTH_N2_peer_agreement_supersession": {
+      "issue_text": "agreement among replicas or peers is not authority",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Supersede(S_peer)"],
+      "expect": {
+        "registry": {"K1": "ACTIVE"},
+        "decision": ["DENIED", "hold"],
+        "last_registry_outcome": "refused",
+        "not_enabled": ["Regate"]
+      }
+    },
+    "AUTH_N3_credential_for_another_action": {
+      "issue_text": "a credential issued for attaching is not a credential for superseding",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)", "Supersede(S_stale)"],
+      "expect": {
+        "registry": {"K1": "ACTIVE"},
+        "decision": ["DENIED", "hold"],
+        "last_registry_outcome": "refused",
+        "not_enabled": ["Regate"]
+      }
+    },
+    "AUTH_N4_unauthorized_correction_arrival": {
+      "issue_text": "a correction from a principal with no credential is not attached",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K3)"],
+      "expect": {
+        "registry": {},
+        "last_registry_outcome": "refused"
+      }
+    },
+    "REPLAY_R1_duplicate_correction_delivery": {
+      "issue_text": "the same correction delivered twice is one correction",
+      "snapshots": "SN_OLD",
+      "steps": ["Correct(K1)", "Correct(K1_dup)"],
+      "expect": {
+        "registry": {"K1": "ACTIVE"},
+        "registry_entries": 1,
+        "last_registry_outcome": "refused"
+      }
+    },
+    "EVID_E1_scope_mismatched_evidence": {
+      "issue_text": "evidence about another scope does not back a removal",
+      "snapshots": "SN_OLD",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1,MISMATCH)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "INACTIVE", false]],
+        "decision": ["DENIED", "evidence"]
+      }
+    },
+    "EVID_E2_partial_snapshot": {
+      "issue_text": "missing evidence is not zero: an incomplete snapshot cannot support INACTIVE",
+      "snapshots": "SN_PARTIAL",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "UNKNOWN", false]],
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "_review_note": "The schedules below were added after the adversarial review at grok-terminal#13 (N4, N5, N6) and their expectations are written here before the first run. They are the AIce#9 model's reading of those schedules; the review's own statements about the source code are PROPOSED until replayed on that code.",
+    "REVIEW_N4_conflicting_duplicate_rows_order_ab": {
+      "issue_text": "the same event appears twice with conflicting buckets; the class must not depend on row order (older row first)",
+      "snapshots": "SN_CONFLICT_DUP_AB",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "ACTIVE", false]],
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "REVIEW_N4_conflicting_duplicate_rows_order_ba": {
+      "issue_text": "the same rows in the other order give the same class",
+      "snapshots": "SN_CONFLICT_DUP_BA",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[1, 1, "ACTIVE", false]],
+        "decision": ["DENIED", "not_inactive"]
+      }
+    },
+    "REVIEW_N5_stale_worker_commits_after_newer_result": {
+      "issue_text": "W1 computed on snapshot 1; snapshot 2 is published; W2 commits on snapshot 2; W1 then tries to commit. The older result is not addressable as current.",
+      "snapshots": "SN_OLD_THEN_ACTIVE",
+      "steps": ["ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "PublishSnapshot(2)", "ReadSnap(W2)", "ReadPolicy(W2)", "Compute(W2)", "CommitWrite(W2)", "CommitWrite(W1)"],
+      "expect": {
+        "records": [[2, 1, "ACTIVE", false]],
+        "commit_version": 1,
+        "decision": ["DENIED", "not_inactive"],
+        "phases": {"W1": "STALE"}
+      }
+    },
+    "REVIEW_N6_release_arrives_before_hold": {
+      "issue_text": "a supersession names a correction that has not arrived. It is refused, not remembered, so the hold that arrives next stays in force. The other order is CTRL_A.",
+      "snapshots": "SN_OLD",
+      "steps": ["Supersede(S_good)", "Correct(K1)", "ReadSnap(W1)", "ReadPolicy(W1)", "Compute(W1)", "CommitWrite(W1)"],
+      "checkpoints": {
+        "1": {"registry": {}, "last_registry_outcome": "refused", "accepted_supersessions": 0}
+      },
+      "expect": {
+        "registry": {"K1": "ACTIVE"},
+        "accepted_supersessions": 0,
+        "decision": ["DENIED", "hold"]
+      }
+    }
+  },
+  "unsafe_variants": {
+    "_how_to_read": "Each variant is a deliberately broken protocol. 'config' names an exploration configuration; 'must_violate' lists invariants that the bounded explorer must find violated, each with a counterexample trace. Other invariants may or may not also fail.",
+    "no_idempotent_commit": {"config": "race", "must_violate": ["I2"], "issue_flaw": "no idempotent commit"},
+    "non_atomic_commit": {"config": "race", "must_violate": ["I2"], "issue_flaw": "simultaneous read/modify/write on the store (check and put are separate steps)"},
+    "blank_as_inactive": {"config": "blank", "must_violate": ["I1", "I3"], "issue_flaw": "blank activity treated as inactive"},
+    "future_as_active": {"config": "future_only", "must_violate": ["I1"], "issue_flaw": "future date counted active"},
+    "stale_overwrites": {"config": "bump", "must_violate": ["I5"], "issue_flaw": "stale commit overwriting newer"},
+    "trust_authorized_flag": {"config": "authority", "must_violate": ["I4"], "issue_flaw": "authorized=true field accepted as authority"},
+    "no_recall": {"config": "recall", "must_violate": ["I4"], "issue_flaw": "a correction after release leaves the release standing"},
+    "gate_uses_worker_view": {"config": "hold", "must_violate": ["I4"], "issue_flaw": "the gate reads the worker's copy of the obligations, not the shared registry"},
+    "no_scope_check": {"config": "evidence", "must_violate": ["I3"], "issue_flaw": "evidence about another scope accepted"},
+    "partial_as_complete": {"config": "partial", "must_violate": ["I1"], "issue_flaw": "an incomplete snapshot treated as complete"},
+    "compensating_report": {"config": "report", "must_violate": ["I6"], "issue_flaw": "a claimed speed or cost gain lets a report pass despite a failed gate"},
+    "scope_blind_holds": {"config": "leak", "must_violate": ["U1"], "issue_flaw": "a correction for another seat blocks this seat (custody leakage across branches)"}
+  },
+  "explore_configs": {
+    "_resized": "After the first run of the model the configurations future_only, versions_crash, authority_dup and authority_scope were added and full_versions and full_authority were split, because the original two exceeded the state bound set for the test run (1.5 million states) and the future_as_active variant pointed at a snapshot that already had a valid active row. Expected outcomes for schedules and variants were not changed.", "_how_to_read": "Each configuration lists the fixture snapshot set, the environment events that may fire (each at most once, in any order), whether a crash may occur (at most once), and whether the optimizer may attach scope-mismatched evidence.",
+    "race": {"snapshots": "SN_OLD", "events": [], "crash": false, "mismatch": false},
+    "blank": {"snapshots": "SN_BLANK", "events": [], "crash": false, "mismatch": false},
+    "future": {"snapshots": "SN_FUTURE_AND_ACTIVE", "events": [], "crash": false, "mismatch": false},
+    "future_only": {"snapshots": "SN_FUTURE", "events": [], "crash": false, "mismatch": false},
+    "bump": {"snapshots": "SN_OLD_THEN_ACTIVE", "events": ["PublishSnapshot(2)"], "crash": false, "mismatch": false},
+    "authority": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Supersede(S_good)", "Supersede(S_flag)", "Supersede(S_peer)", "Supersede(S_stale)"], "crash": false, "mismatch": false},
+    "recall": {"snapshots": "SN_OLD", "events": ["Correct(K1)"], "crash": false, "mismatch": false},
+    "hold": {"snapshots": "SN_OLD", "events": ["Correct(K1)"], "crash": false, "mismatch": false},
+    "evidence": {"snapshots": "SN_OLD", "events": [], "crash": false, "mismatch": true},
+    "partial": {"snapshots": "SN_PARTIAL", "events": [], "crash": false, "mismatch": false},
+    "report": {"snapshots": "SN_BLANK", "events": [], "crash": false, "mismatch": false},
+    "leak": {"snapshots": "SN_OLD", "events": ["Correct(K2)"], "crash": false, "mismatch": false},
+    "full_crash_hold": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Supersede(S_good)"], "crash": true, "mismatch": false},
+    "full_versions": {"snapshots": "SN_OLD_THEN_ACTIVE", "events": ["PublishSnapshot(2)", "UpdatePolicy(2)", "Correct(K1)"], "crash": false, "mismatch": false},
+    "versions_crash": {"snapshots": "SN_OLD_THEN_ACTIVE", "events": ["PublishSnapshot(2)", "Correct(K1)"], "crash": true, "mismatch": false},
+    "authority_dup": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Correct(K1_dup)", "Supersede(S_good)", "Supersede(S_auditor)"], "crash": false, "mismatch": false},
+    "authority_scope": {"snapshots": "SN_OLD", "events": ["Correct(K1)", "Correct(K2)", "Correct(K3)", "Supersede(S_good)"], "crash": false, "mismatch": false}
+  },
+  "safe_model_expectations": {
+    "invariants_hold_in_every_explored_configuration": ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "U1"],
+    "no_deadlock_outside_goal_in_every_explored_configuration": true,
+    "every_state_can_reach_committed_or_blocked_with_reason": true,
+    "_note": "The two progress statements are reachability checks over a bounded graph. They are necessary for the fairness-conditional claim [](Accepted => <>(Committed or BlockedWithReason)); they are not that claim."
+  },
+  "mapping_expectations": {
+    "_note": "What the current sticky_scorer represents, written from reading the module before the adapter exists.",
+    "custody_membership_matches_model_for_every_registry_log": true,
+    "_refuted_by_running_the_adapter": "The line above was written before the adapter ran and is false for logs in which a correction is attached, superseded by an authorized event, and its attach credential is delivered again: the scorer accepts the second attach and holds the correction again; the model refuses it. Pinned in tests/test_concurrency_adapter.py (test_a_replayed_attach_token_resurrects_a_superseded_correction_in_the_scorer). The line is kept as written.",
+    "flag_only_supersession_refused_with_verifier": true,
+    "flag_only_supersession_accepted_without_verifier": true,
+    "replayed_supersession_token_accepted_by_scorer": true,
+    "scorer_has_no_representation_of": ["snapshot_version", "policy_version", "commit_version", "idempotent_commit", "worker_crash_retry", "interleaving", "UNKNOWN_class", "freshness"]
+  }
+}
